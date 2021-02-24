@@ -104,7 +104,8 @@ void get_args(int argc, char *argv[], uint8_t *args)
 void generate(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, entity_t **u_stairs, uint16_t *num_d_stairs, entity_t **d_stairs)
 {
     /* printf("CREATING:\n"); */
-    uint8_t i, j, v;
+    uint16_t i, j;
+    uint8_t v;
     *num_rooms = 6 + rand() % 2;
     *rooms = malloc(sizeof(room_t) * *num_rooms);
     do {
@@ -167,7 +168,8 @@ void generate(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *
 void save(entity_t *player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms, uint16_t num_u_stairs, entity_t *u_stairs, uint16_t num_d_stairs, entity_t *d_stairs)
 {
     /* printf("SAVING:\n"); */
-    uint8_t i, j;
+    uint16_t i;
+    uint8_t j;
     uint8_t w_byte;
     uint16_t w_short;
     uint32_t w;
@@ -229,7 +231,8 @@ void save(entity_t *player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_ro
 
 void load(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, entity_t **u_stairs, uint16_t *num_d_stairs, entity_t **d_stairs)
 {
-    uint8_t i, j;
+    uint16_t i;
+    uint8_t j;
     uint16_t count = 0;
     uint8_t r_byte;
     uint16_t r_short;
@@ -297,7 +300,8 @@ void load(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_
 
 void map_rooms(char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms)
 {
-    uint8_t i, j, k;
+    uint16_t i;
+    uint8_t j, k;
     for (i = 0; i < num_rooms; i++) {
         for (j = 0; j < rooms[i].ysize; j++) {
             for (k = 0; k < rooms[i].xsize; k++) {
@@ -337,7 +341,7 @@ void sketch_map(char display[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH])
 
 void place(char display[W_HEIGHT][W_WIDTH], entity_t *entities, uint16_t count)
 {
-    uint8_t i;
+    uint16_t i;
     for (i = 0; i < count; i++) {
         display[entities[i].ypos][entities[i].xpos] = entities[i].symbol;
     }
