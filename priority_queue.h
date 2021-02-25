@@ -24,7 +24,7 @@ typedef struct priority_queue {
 int priority_queue_init(priority_queue_t *q);
 int priority_queue_delete(priority_queue_t *q);
 int priority_queue_add(priority_queue_t *q, vertex_t v, uint16_t priority);
-int priority_queue_extract_min(priority_queue_t *q, vertex_t *v);
+int priority_queue_extract_min(priority_queue_t *q, vertex_t *v, uint16_t *priority);
 int priority_queue_decrease_priority(priority_queue_t *q, vertex_t v, uint16_t priority);
 int priority_queue_size(priority_queue_t *q);
 

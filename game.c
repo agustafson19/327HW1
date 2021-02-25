@@ -47,7 +47,7 @@ void get_neighbors(stack_t *s, vertex_t v, char map[W_HEIGHT][W_WIDTH], uint8_t 
 
 void place(char display[W_HEIGHT][W_WIDTH], entity_t *entities, uint16_t count);
 
-void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH]);
+void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
 void draw(char display[W_HEIGHT][W_WIDTH]);
 
 int main(int argc, char *argv[])
@@ -97,8 +97,8 @@ int main(int argc, char *argv[])
     draw(display);
 
     /* Displaying Distances */
-    draw_distance(floor_distance);
-    draw_distance(tunnel_distance);
+    draw_distance(floor_distance, map);
+    draw_distance(tunnel_distance, map);
 
     /* Cleaning Memory */
     free(player);
@@ -389,7 +389,9 @@ void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], 
         }
     }
     while (priority_queue_size(&q) > 0) {
-        priority_queue_extract_min(&q, &u);
+        priority_queue_extract_min(&q, &u, &temp);
+        if (temp == 0xFFFF)
+            continue;
         get_neighbors(&s, u, map, hardness, tunnel);
         while (stack_size(&s) > 0) {
             stack_pop(&s, &v);
@@ -455,13 +457,15 @@ void place(char display[W_HEIGHT][W_WIDTH], entity_t *entities, uint16_t count)
     }
 }
 
-void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH])
+void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH])
 {
     uint8_t i, j;
     for (i = 0; i < W_HEIGHT; i++) {
         for (j = 0; j < W_WIDTH; j++) {
-            if (distance[i][j] == 0xFFFF)
+            if (distance[i][j] == 0xFFFF && map[i][j] == ' ')
                 printf(" ");
+            else if (distance[i][j] == 0xFFFF && map[i][j] != ' ')
+                printf("X");
             else if (distance[i][j] == 0)
                 printf("@");
             else

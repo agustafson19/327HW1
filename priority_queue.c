@@ -34,7 +34,7 @@ int priority_queue_add(priority_queue_t *q, vertex_t v, uint16_t priority)
     return 0;
 }
 
-int priority_queue_extract_min(priority_queue_t *q, vertex_t *v)
+int priority_queue_extract_min(priority_queue_t *q, vertex_t *v, uint16_t *priority)
 {
     int i = 0, j;
     priority_queue_node_t temp;
@@ -42,6 +42,7 @@ int priority_queue_extract_min(priority_queue_t *q, vertex_t *v)
         return 1;
     }
     *v = q->nodes[0].value;
+    *priority = q->nodes[0].priority;
     q->size--;
     q->nodes[0] = q->nodes[q->size];
     while (2*i+1 < q->size) {
