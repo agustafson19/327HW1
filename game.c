@@ -7,6 +7,10 @@
 
 #include <endian.h>
 
+#include "vertex.c"
+#include "stack.c"
+#include "priority_queue.c"
+
 #define W_WIDTH 80
 #define W_HEIGHT 21
 
@@ -35,10 +39,15 @@ void load(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_
 
 void map_rooms(char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms);
 
-void init_map(char map[W_HEIGHT][W_WIDTH]);
+void init_map(char map[W_HEIGHT][W_WIDTH], char c);
 void sketch_map(char display[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
 
+void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], entity_t *player, uint16_t distance[W_HEIGHT][W_WIDTH], uint8_t tunnel);
+void get_neighbors(stack_t *s, vertex_t v, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint8_t tunnel);
+
 void place(char display[W_HEIGHT][W_WIDTH], entity_t *entities, uint16_t count);
+
+void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH]);
 void draw(char display[W_HEIGHT][W_WIDTH]);
 
 int main(int argc, char *argv[])
@@ -53,6 +62,8 @@ int main(int argc, char *argv[])
     /* Declarations */
     entity_t *player;
     uint8_t hardness[W_HEIGHT][W_WIDTH];
+    uint16_t floor_distance[W_HEIGHT][W_WIDTH];
+    uint16_t tunnel_distance[W_HEIGHT][W_WIDTH];
     uint16_t num_rooms;
     room_t *rooms;
     uint16_t num_u_stairs;
@@ -71,8 +82,12 @@ int main(int argc, char *argv[])
         save(player, hardness, num_rooms, rooms, num_u_stairs, u_stairs, num_d_stairs, d_stairs);
 
     /* Sketching Map */
-    init_map(map);
+    init_map(map, ' ');
     map_rooms(map, hardness, num_rooms, rooms);
+
+    /* Distances */
+    dijkstra(hardness, map, player, floor_distance, 0);
+    dijkstra(hardness, map, player, tunnel_distance, 1);
 
     /* Displaying */
     sketch_map(display, map);
@@ -80,6 +95,10 @@ int main(int argc, char *argv[])
     place(display, u_stairs, num_u_stairs);
     place(display, d_stairs, num_d_stairs);
     draw(display);
+
+    /* Displaying Distances */
+    draw_distance(floor_distance);
+    draw_distance(tunnel_distance);
 
     /* Cleaning Memory */
     free(player);
@@ -112,8 +131,8 @@ void generate(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *
         for (i = 0; i < *num_rooms; i++) {
             (*rooms)[i].xsize = 4 + rand() % 10;
             (*rooms)[i].ysize = 3 + rand() % 10;
-            (*rooms)[i].xpos = rand() % (W_WIDTH - (*rooms)[i].xsize);
-            (*rooms)[i].ypos = rand() % (W_HEIGHT - (*rooms)[i].ysize);
+            (*rooms)[i].xpos = 1 + rand() % (W_WIDTH - (*rooms)[i].xsize - 2);
+            (*rooms)[i].ypos = 1 + rand() % (W_HEIGHT - (*rooms)[i].ysize - 2);
         }
         v = 1;
         for (i = 1; i < *num_rooms && v; i++) {
@@ -146,8 +165,16 @@ void generate(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *
     (*d_stairs)->symbol = '>';
     for (i = 0; i < W_HEIGHT; i++) {
         for (j = 0; j < W_WIDTH; j++) {
-            hardness[i][j] = 0xFF;
+            hardness[i][j] = 0x80;
         }
+    }
+    for (i = 0; i < W_HEIGHT; i++) {
+        hardness[i][0] = 0xFF;
+        hardness[i][W_WIDTH-1] = 0xFF;
+    }
+    for (j = 0; j < W_WIDTH; j++) {
+        hardness[0][j] = 0xFF;
+        hardness[W_HEIGHT-1][j] = 0xFF;
     }
     for (i = 1; i < *num_rooms; i++) {
         for (j = (*rooms)[i-1].ypos + (*rooms)[i-1].ysize / 2; j <= (*rooms)[i].ypos + (*rooms)[i].ysize / 2; j++) {
@@ -319,12 +346,12 @@ void map_rooms(char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH],
     }
 }
 
-void init_map(char map[W_HEIGHT][W_WIDTH])
+void init_map(char map[W_HEIGHT][W_WIDTH], char c)
 {
     uint8_t i, j;
     for (i = 0; i < W_HEIGHT; i++) {
         for (j = 0; j < W_WIDTH; j++) {
-            map[i][j] = ' ';
+            map[i][j] = c;
         }
     }
 }
@@ -339,11 +366,108 @@ void sketch_map(char display[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH])
     }
 }
 
+void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], entity_t* player, uint16_t distance[W_HEIGHT][W_WIDTH], uint8_t tunnel)
+{
+    uint8_t i, j;
+    uint16_t temp;
+    vertex_t v, u;
+    stack_t s;
+    priority_queue_t q;
+    stack_init(&s);
+    priority_queue_init(&q);
+    distance[player->ypos][player->xpos] = 0;
+    for (i = 0; i < W_HEIGHT; i++) {
+        for (j = 0; j < W_WIDTH; j++) {
+            if (!(i == player->ypos && j == player->xpos)) {
+                distance[i][j] = 0xFFFF;
+            }
+            if ((tunnel || map[i][j] != ' ') && hardness[i][j] != 0xFF) {
+                v.ypos = i;
+                v.xpos = j;
+                priority_queue_add(&q, v, distance[v.ypos][v.xpos]);
+            }
+        }
+    }
+    while (priority_queue_size(&q) > 0) {
+        priority_queue_extract_min(&q, &u);
+        get_neighbors(&s, u, map, hardness, tunnel);
+        while (stack_size(&s) > 0) {
+            stack_pop(&s, &v);
+            if (map[u.ypos][u.xpos] == ' ')
+                temp = distance[u.ypos][u.xpos] + 1 + hardness[u.ypos][u.xpos] / 85;
+            else
+                temp = distance[u.ypos][u.xpos] + 1;
+            if (temp < distance[v.ypos][v.xpos]) {
+                distance[v.ypos][v.xpos] = temp;
+                priority_queue_decrease_priority(&q, v, temp);
+            }
+        }
+    }
+    stack_delete(&s);
+    priority_queue_delete(&q);
+}
+
+void get_neighbors(stack_t *s, vertex_t v, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint8_t tunnel)
+{
+    vertex_t u;
+    if (v.ypos > 0) {
+        u.ypos = v.ypos - 1;
+        if (v.xpos > 0) {
+            u.xpos = v.xpos - 1;
+            if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
+        }
+        u.xpos = v.xpos;
+        if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
+        if (v.xpos < W_WIDTH - 1) {
+            u.xpos = v.xpos + 1;
+            if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
+        }
+    }
+    u.ypos = v.ypos;
+    if (v.xpos > 0) {
+        u.xpos = v.xpos - 1;
+        if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
+    }
+    if (v.xpos < W_WIDTH - 1) {
+        u.xpos = v.xpos + 1;
+        if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
+    }
+    if (v.ypos < W_HEIGHT) {
+        u.ypos = v.ypos + 1;
+        if (v.xpos > 0) {
+            u.xpos = v.xpos - 1;
+            if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
+        }
+        u.xpos = v.xpos;
+        if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
+        if (v.xpos < W_WIDTH - 1) {
+            u.xpos = v.xpos + 1;
+            if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
+        }
+    }
+}
+
 void place(char display[W_HEIGHT][W_WIDTH], entity_t *entities, uint16_t count)
 {
     uint16_t i;
     for (i = 0; i < count; i++) {
         display[entities[i].ypos][entities[i].xpos] = entities[i].symbol;
+    }
+}
+
+void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH])
+{
+    uint8_t i, j;
+    for (i = 0; i < W_HEIGHT; i++) {
+        for (j = 0; j < W_WIDTH; j++) {
+            if (distance[i][j] == 0xFFFF)
+                printf(" ");
+            else if (distance[i][j] == 0)
+                printf("@");
+            else
+                printf("%c", (distance[i][j] % 10) + '0');
+        }
+        printf("\n");
     }
 }
 

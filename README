@@ -1,0 +1,15 @@
+Name: Arvid Gustafson
+
+vertex.h contains a vertex_t struct, consisting of an x position and y position.
+
+vertex.c contains the method vertex_equal, used determine if two verticies are equal.
+
+stack.h and stack.c together contain an implementation of a stack. The value each node stores is a vertex_t, and there is no stack_is_empty function; otherwise, it is identical to the stack made by Jeremy Shaffer on 2/23/2021.
+
+priority_queue.h and priority_queue.c together contain an array implementation of a binary min heap of the type vertex_t. Its functions are essencially identical to the stacks, except there is no peek function, and there is a function priority_queue_decrease_priority.
+
+The djikstra function is used to populate a distance array.
+
+get_neighbors is used only within the djiksta function, to populate a stack with the neighbors of a certain array.
+
+draw_distance is used to draw a distance array.
