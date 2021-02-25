@@ -1,0 +1,25 @@
+commit a6ff57c0e737783d38d20c1c92cd6782ccaa08a2
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Feb 24 21:03:45 2021 -0600
+
+    Finnished Assignment 1.03
+    
+    Implemented a vertex struct, a stack of verticies, a minimal priority queue of
+    vertecies, djikstra's algorithm to populate arrays of distances from the
+    player character, code that draws them. The bug that existed at the end
+    of Assignment 1.02 that kept Hello.rlg327 has been delt with.
+
+commit 8da47a1a44cb1c4657e9f599f489d34a3419b13e
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Feb 24 14:10:35 2021 -0600
+
+    Adjusted size of temporary variables.
+    
+    Adjusted size of temporary variables used in iteration to be at least
+    the size of those to which they go.
+
+commit a460a9e325a911fc4d428cd75297790a031f9198
+Author: agustafson19 <40578471+agustafson19@users.noreply.github.com>
+Date:   Wed Feb 24 13:58:05 2021 -0600
+
+    Initial Commit
