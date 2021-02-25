@@ -1,3 +1,30 @@
+commit ff2e0b3b650e863a6a53b3951743ea81a38227f3
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Feb 24 21:37:06 2021 -0600
+
+    Updated CHANGELOG and submission file
+
+commit 3a41549a6b0ca6cbedc87e2bd6139c2b5caf7744
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Feb 24 21:34:03 2021 -0600
+
+    Added Xs
+    
+    Added Xs where floor bound enemies cannot get to the player. The actual
+    value of these within the distance array is 0xFFFF.
+
+commit bece3f75191d8d77d1524b341bfe144bc992a19b
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Feb 24 21:11:19 2021 -0600
+
+    Added tarballed archive
+
+commit aa2e00732a6684fb4381201aa52aadfe6920e7c0
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Feb 24 21:08:22 2021 -0600
+
+    Added the Changelog
+
 commit a6ff57c0e737783d38d20c1c92cd6782ccaa08a2
 Author: agustafson19 <arvidg@iastate.edu>
 Date:   Wed Feb 24 21:03:45 2021 -0600
