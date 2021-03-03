@@ -18,6 +18,12 @@
 #define LOAD 0x02
 #define NUMMON 0x04
 
+#define SMART 0x01
+#define TELE 0x02
+#define TUNNEL 0x04
+#define ERATIC 0x08
+#define ALIVE 0x10
+
 typedef struct room {
     uint8_t xpos;
     uint8_t ypos;
@@ -25,28 +31,36 @@ typedef struct room {
     uint8_t ysize;
 } room_t;
 
-typedef struct entity {
+typedef struct character {
     uint8_t xpos;
     uint8_t ypos;
     char symbol;
-} entity_t;
+    uint16_t sequence;
+    uint8_t characteristics;
+    uint8_t speed;
+} character_t;
 
 void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_monsters);
 
-void generate(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, entity_t **u_stairs, uint16_t *num_d_stairs, entity_t **d_stairs);
+void generate(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, character_t **u_stairs, uint16_t *num_d_stairs, character_t **d_stairs);
 
-void save(entity_t *player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms, uint16_t num_u_stairs, entity_t *u_stairs, uint16_t num_d_stairs, entity_t *d_stairs);
-void load(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, entity_t **u_stairs, uint16_t *num_d_stairs, entity_t **d_stairs);
+void save(character_t *player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms, uint16_t num_u_stairs, character_t *u_stairs, uint16_t num_d_stairs, character_t *d_stairs);
+void load(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, character_t **u_stairs, uint16_t *num_d_stairs, character_t **d_stairs);
 
 void map_rooms(char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms);
 
 void init_map(char map[W_HEIGHT][W_WIDTH], char c);
 void sketch_map(char display[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
 
-void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], entity_t *player, uint16_t distance[W_HEIGHT][W_WIDTH], uint8_t tunnel);
+void init_character_map(character_t *character_map[W_HEIGHT][W_WIDTH]);
+void init_player(heap_t characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player);
+void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], room_t *rooms, uint16_t num_rooms, uint16_t num_monsters);
+
+void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], character_t *player, uint16_t distance[W_HEIGHT][W_WIDTH], uint8_t tunnel);
 void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint8_t tunnel);
 
-void place(char display[W_HEIGHT][W_WIDTH], entity_t *entities, uint16_t count);
+void place(char display[W_HEIGHT][W_WIDTH], character_t *entities, uint16_t count);
+void place_characters(char display[W_HEIGHT][W_WIDTH], character_t *characters[W_HEIGHT][W_WIDTH]);
 
 void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
 void draw(char display[W_HEIGHT][W_WIDTH]);
@@ -58,17 +72,19 @@ int main(int argc, char *argv[])
 
     /* Declarations */
     uint8_t args = 0x00;
-    entity_t *player;
+    character_t *player;
     uint8_t hardness[W_HEIGHT][W_WIDTH];
     uint16_t floor_distance[W_HEIGHT][W_WIDTH];
     uint16_t tunnel_distance[W_HEIGHT][W_WIDTH];
     uint16_t num_rooms;
     room_t *rooms;
     uint16_t num_u_stairs;
-    entity_t *u_stairs;
+    character_t *u_stairs;
     uint16_t num_d_stairs;
-    entity_t *d_stairs;
-    uint16_t num_monsters = 0;
+    character_t *d_stairs;
+    uint16_t num_monsters;
+    heap_t characters;
+    character_t *character_map[W_HEIGHT][W_WIDTH];
     char map[W_HEIGHT][W_WIDTH];
     char display[W_HEIGHT][W_WIDTH];
 
@@ -87,31 +103,31 @@ int main(int argc, char *argv[])
     init_map(map, ' ');
     map_rooms(map, hardness, num_rooms, rooms);
 
-    /* Distances */
+    /* Generating Characters */
+    heap_init(&characters);
+    init_character_map(character_map);
+    init_player(characters, character_map, player);
+    if (!(args & NUMMON))
+        num_monsters = 10;
+    num_monsters = num_monsters < 1481 ? num_monsters : 1481;
+    generate_monsters(&characters, character_map, map, rooms, num_rooms, num_monsters);
+
+    /* Finding Distances */
     dijkstra(hardness, map, player, floor_distance, 0);
     dijkstra(hardness, map, player, tunnel_distance, 1);
 
-    /* Monsters */
-    if (!(args & NUMMON))
-        num_monsters = 10;
-    printf("%d", num_monsters);
-
     /* Displaying */
     sketch_map(display, map);
-    place(display, player, 1);
     place(display, u_stairs, num_u_stairs);
     place(display, d_stairs, num_d_stairs);
+    place_characters(display, character_map);
     draw(display);
-
-    /* Displaying Distances */
-    draw_distance(floor_distance, map);
-    draw_distance(tunnel_distance, map);
 
     /* Cleaning Memory */
     free(rooms);
     free(u_stairs);
     free(d_stairs);
-    free(player);
+    heap_delete(&characters);
 }
 
 void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_monsters)
@@ -131,7 +147,7 @@ void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_monsters)
     }
 }
 
-void generate(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, entity_t **u_stairs, uint16_t *num_d_stairs, entity_t **d_stairs)
+void generate(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, character_t **u_stairs, uint16_t *num_d_stairs, character_t **d_stairs)
 {
     /* printf("CREATING:\n"); */
     uint16_t i, j;
@@ -160,17 +176,18 @@ void generate(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *
         printf("%d : %d : %d : %d\n", (*rooms)[i].xpos, (*rooms)[i].ypos, (*rooms)[i].xsize, (*rooms)[i].ysize);
     }
     */
-    *player = malloc(sizeof(entity_t));
-    (*player)->xpos = (*rooms)[0].xpos;
-    (*player)->ypos = (*rooms)[0].ypos;
+    *player = malloc(sizeof(character_t));
+    i = rand() % *num_rooms;
+    (*player)->xpos = (*rooms)[i].xpos + rand() % (*rooms)[i].xsize;
+    (*player)->ypos = (*rooms)[i].ypos + rand() % (*rooms)[i].ysize;
     (*player)->symbol = '@';
     *num_u_stairs = 1;
-    *u_stairs = malloc(sizeof(entity_t));
+    *u_stairs = malloc(sizeof(character_t));
     (*u_stairs)->xpos = (*rooms)[2].xpos + 1;
     (*u_stairs)->ypos = (*rooms)[2].ypos + 1;
     (*u_stairs)->symbol = '<';
     *num_d_stairs = 1;
-    *d_stairs = malloc(sizeof(entity_t));
+    *d_stairs = malloc(sizeof(character_t));
     (*d_stairs)->xpos = (*rooms)[*num_rooms - 1].xpos + 1;
     (*d_stairs)->ypos = (*rooms)[*num_rooms - 1].ypos + 1;
     (*d_stairs)->symbol = '>';
@@ -203,7 +220,7 @@ void generate(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *
     }
 }
 
-void save(entity_t *player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms, uint16_t num_u_stairs, entity_t *u_stairs, uint16_t num_d_stairs, entity_t *d_stairs)
+void save(character_t *player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms, uint16_t num_u_stairs, character_t *u_stairs, uint16_t num_d_stairs, character_t *d_stairs)
 {
     /* printf("SAVING:\n"); */
     uint16_t i;
@@ -267,7 +284,7 @@ void save(entity_t *player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_ro
     free(path);
 }
 
-void load(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, entity_t **u_stairs, uint16_t *num_d_stairs, entity_t **d_stairs)
+void load(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, character_t **u_stairs, uint16_t *num_d_stairs, character_t **d_stairs)
 {
     uint16_t i;
     uint8_t j;
@@ -286,7 +303,7 @@ void load(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_
     fread(version, sizeof(char), 12, f);
     fread(&r, sizeof(uint32_t), 1, f);
     fread(&r, sizeof(uint32_t), 1, f);
-    *player = malloc(sizeof(entity_t));
+    *player = malloc(sizeof(character_t));
     fread(&r_byte, sizeof(uint8_t), 1, f);
     (*player)->xpos = r_byte;
     fread(&r_byte, sizeof(uint8_t), 1, f);
@@ -314,7 +331,7 @@ void load(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_
     }
     fread(&r_short, sizeof(uint16_t), 1, f);
     *num_u_stairs = be16toh(r_short);
-    *u_stairs = malloc(sizeof(entity_t) * *num_u_stairs);
+    *u_stairs = malloc(sizeof(character_t) * *num_u_stairs);
     for (i = 0; i < *num_u_stairs; i++) {
         fread(&r_byte, sizeof(uint8_t), 1, f);
         (*u_stairs)[i].xpos = r_byte;
@@ -324,7 +341,7 @@ void load(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_
     }
     fread(&r_short, sizeof(uint16_t), 1, f);
     *num_d_stairs = be16toh(r_short);
-    *d_stairs = malloc(sizeof(entity_t) * *num_d_stairs);
+    *d_stairs = malloc(sizeof(character_t) * *num_d_stairs);
     for (i = 0; i < *num_d_stairs; i++) {
         fread(&r_byte, sizeof(uint8_t), 1, f);
         (*d_stairs)[i].xpos = r_byte;
@@ -377,7 +394,57 @@ void sketch_map(char display[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH])
     }
 }
 
-void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], entity_t* player, uint16_t distance[W_HEIGHT][W_WIDTH], uint8_t tunnel)
+void init_character_map(character_t *character_map[W_HEIGHT][W_WIDTH])
+{
+    uint8_t i, j;
+    for (i = 0; i < W_HEIGHT; i++) {
+        for (j = 0; j < W_WIDTH; j++) {
+            character_map[i][j] = NULL;
+        }
+    }
+}
+
+void init_player(heap_t characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player)
+{
+    player->sequence = 0;
+    player->characteristics |= ALIVE;
+    player->speed = 10;
+    heap_add(&characters, player, 1000 / player->speed);
+    character_map[player->ypos][player->xpos] = player;
+}
+
+void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], room_t *rooms, uint16_t num_rooms, uint16_t num_monsters)
+{
+    uint16_t i, j;
+    character_t *monster;
+    for (i = 1; i <= num_monsters; i++) {
+        monster = malloc(sizeof(character_t));
+        do {
+            monster->characteristics = 0x00;
+            monster->characteristics |= rand() % 2 ? SMART : 0x00;
+            monster->characteristics |= rand() % 2 ? TELE : 0x00;
+            monster->characteristics |= rand() % 2 ? TUNNEL : 0x00;
+            monster->characteristics |= rand() % 2 ? ERATIC : 0x00;
+            monster->symbol = monster->characteristics < 10 ? '0' + monster->characteristics : monster->characteristics - 10 + 'a';
+            monster->characteristics |= ALIVE;
+            monster->sequence = i;
+            monster->speed = 5 + rand() % 16;
+            if (monster->characteristics & TUNNEL) {
+                monster->xpos = 1 + rand() % (W_WIDTH - 2);
+                monster->ypos = 1 + rand() % (W_HEIGHT - 2);
+            }
+            else {
+                j = rand() % num_rooms;
+                monster->xpos = rooms[j].xpos + rand() % rooms[j].xsize;
+                monster->ypos = rooms[j].ypos + rand() % rooms[j].ysize;
+            }
+        } while (character_map[monster->ypos][monster->xpos] != NULL || (!(monster->characteristics & TUNNEL) && (map[monster->ypos][monster->xpos] == ' ')));
+        heap_add(characters, monster, 1000 / monster->speed);
+        character_map[monster->ypos][monster->xpos] = monster;
+    }
+}
+
+void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], character_t* player, uint16_t distance[W_HEIGHT][W_WIDTH], uint8_t tunnel)
 {
     uint8_t i, j;
     uint16_t temp;
@@ -494,7 +561,18 @@ void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t
     }
 }
 
-void place(char display[W_HEIGHT][W_WIDTH], entity_t *entities, uint16_t count)
+void place_characters(char display[W_HEIGHT][W_WIDTH], character_t *characters[W_HEIGHT][W_WIDTH])
+{
+    uint8_t i, j;
+    for (i = 0; i < W_HEIGHT; i++) {
+        for (j = 0; j < W_WIDTH; j++) {
+            if (characters[i][j] != NULL)
+                display[i][j] = characters[i][j]->symbol;
+        }
+    }
+}
+
+void place(char display[W_HEIGHT][W_WIDTH], character_t *entities, uint16_t count)
 {
     uint16_t i;
     for (i = 0; i < count; i++) {

@@ -15,6 +15,10 @@ int heap_init(heap_t *h)
 
 int heap_delete(heap_t *h)
 {
+    uint16_t i;
+    for (i = 0; i < h->size; i++) {
+        free(h->nodes[i].value);
+    }
     free(h->nodes);
     return 0;
 }
