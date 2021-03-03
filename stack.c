@@ -19,7 +19,7 @@ int stack_delete(stack_t *s)
     return 0;
 }
 
-int stack_push(stack_t *s, vertex_t value)
+int stack_push(stack_t *s, void *value)
 {
     stack_node_t *n;
     if (!(n = malloc(sizeof(*n)))) {
@@ -32,7 +32,7 @@ int stack_push(stack_t *s, vertex_t value)
     return 0;
 }
 
-int stack_peek(stack_t *s, vertex_t *value)
+int stack_peek(stack_t *s, void **value)
 {
     if (!s->top) {
         return 1;
@@ -41,7 +41,7 @@ int stack_peek(stack_t *s, vertex_t *value)
     return 0;
 }
 
-int stack_pop(stack_t *s, vertex_t *value)
+int stack_pop(stack_t *s, void **value)
 {
     stack_node_t *n;
     if (!s->top) {

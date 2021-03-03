@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 #include "vertex.h"
 
 int vertex_equal(vertex_t v, vertex_t u)

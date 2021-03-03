@@ -7,15 +7,16 @@
 
 #include <endian.h>
 
-#include "vertex.c"
-#include "stack.c"
-#include "priority_queue.c"
+#include "vertex.h"
+#include "stack.h"
+#include "heap.h"
 
 #define W_WIDTH 80
 #define W_HEIGHT 21
 
 #define SAVE 0x01
 #define LOAD 0x02
+#define NUMMON 0x04
 
 typedef struct room {
     uint8_t xpos;
@@ -30,7 +31,7 @@ typedef struct entity {
     char symbol;
 } entity_t;
 
-void get_args(int argc, char *argv[], uint8_t *args);
+void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_monsters);
 
 void generate(entity_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, entity_t **u_stairs, uint16_t *num_d_stairs, entity_t **d_stairs);
 
@@ -43,7 +44,7 @@ void init_map(char map[W_HEIGHT][W_WIDTH], char c);
 void sketch_map(char display[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
 
 void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], entity_t *player, uint16_t distance[W_HEIGHT][W_WIDTH], uint8_t tunnel);
-void get_neighbors(stack_t *s, vertex_t v, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint8_t tunnel);
+void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint8_t tunnel);
 
 void place(char display[W_HEIGHT][W_WIDTH], entity_t *entities, uint16_t count);
 
@@ -52,14 +53,11 @@ void draw(char display[W_HEIGHT][W_WIDTH]);
 
 int main(int argc, char *argv[])
 {
-    /* Switch Processing */
-    uint8_t args = 0x00;
-    get_args(argc, argv, &args);
-
     /* Seeding */
     srand(time(NULL));
 
     /* Declarations */
+    uint8_t args = 0x00;
     entity_t *player;
     uint8_t hardness[W_HEIGHT][W_WIDTH];
     uint16_t floor_distance[W_HEIGHT][W_WIDTH];
@@ -70,8 +68,12 @@ int main(int argc, char *argv[])
     entity_t *u_stairs;
     uint16_t num_d_stairs;
     entity_t *d_stairs;
+    uint16_t num_monsters = 0;
     char map[W_HEIGHT][W_WIDTH];
     char display[W_HEIGHT][W_WIDTH];
+
+    /* Switch Processing */
+    get_args(argc, argv, &args, &num_monsters);
 
     /* Saving and Loading */
     if (args & LOAD)
@@ -89,6 +91,11 @@ int main(int argc, char *argv[])
     dijkstra(hardness, map, player, floor_distance, 0);
     dijkstra(hardness, map, player, tunnel_distance, 1);
 
+    /* Monsters */
+    if (!(args & NUMMON))
+        num_monsters = 10;
+    printf("%d", num_monsters);
+
     /* Displaying */
     sketch_map(display, map);
     place(display, player, 1);
@@ -101,13 +108,13 @@ int main(int argc, char *argv[])
     draw_distance(tunnel_distance, map);
 
     /* Cleaning Memory */
-    free(player);
     free(rooms);
     free(u_stairs);
     free(d_stairs);
+    free(player);
 }
 
-void get_args(int argc, char *argv[], uint8_t *args)
+void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_monsters)
 {
     uint8_t i;
     for (i = 1; i < argc; i++) {
@@ -116,6 +123,10 @@ void get_args(int argc, char *argv[], uint8_t *args)
         }
         else if (!strcmp(argv[i], "--load")) {
             *args |= LOAD;
+        }
+        else if (!strcmp(argv[i], "--nummon")) {
+            *args |= NUMMON;
+            sscanf(argv[++i], "%hd", num_monsters);
         }
     }
 }
@@ -370,11 +381,11 @@ void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], 
 {
     uint8_t i, j;
     uint16_t temp;
-    vertex_t v, u;
+    vertex_t *v, *u;
     stack_t s;
-    priority_queue_t q;
+    heap_t h;
     stack_init(&s);
-    priority_queue_init(&q);
+    heap_init(&h);
     distance[player->ypos][player->xpos] = 0;
     for (i = 0; i < W_HEIGHT; i++) {
         for (j = 0; j < W_WIDTH; j++) {
@@ -382,69 +393,103 @@ void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], 
                 distance[i][j] = 0xFFFF;
             }
             if ((tunnel || map[i][j] != ' ') && hardness[i][j] != 0xFF) {
-                v.ypos = i;
-                v.xpos = j;
-                priority_queue_add(&q, v, distance[v.ypos][v.xpos]);
+                v = malloc(sizeof(vertex_t));
+                v->ypos = i;
+                v->xpos = j;
+                heap_add(&h, v, distance[v->ypos][v->xpos]);
             }
         }
     }
-    while (priority_queue_size(&q) > 0) {
-        priority_queue_extract_min(&q, &u, &temp);
-        if (temp == 0xFFFF)
+    while (heap_size(&h) > 0) {
+        heap_extract_min(&h, (void**) &u);
+        if (temp == 0xFFFF) {
+            free(u);
             continue;
+        }
         get_neighbors(&s, u, map, hardness, tunnel);
         while (stack_size(&s) > 0) {
-            stack_pop(&s, &v);
-            if (map[u.ypos][u.xpos] == ' ')
-                temp = distance[u.ypos][u.xpos] + 1 + hardness[u.ypos][u.xpos] / 85;
+            stack_pop(&s, (void**) &v);
+            if (map[u->ypos][u->xpos] == ' ')
+                temp = distance[u->ypos][u->xpos] + 1 + hardness[u->ypos][u->xpos] / 85;
             else
-                temp = distance[u.ypos][u.xpos] + 1;
-            if (temp < distance[v.ypos][v.xpos]) {
-                distance[v.ypos][v.xpos] = temp;
-                priority_queue_decrease_priority(&q, v, temp);
+                temp = distance[u->ypos][u->xpos] + 1;
+            if (temp < distance[v->ypos][v->xpos]) {
+                distance[v->ypos][v->xpos] = temp;
+                heap_decrease_priority_vertex(&h, v, temp);
+            }
+            free(v);
+        }
+        free(u);
+    }
+    stack_delete(&s);
+    heap_delete(&h);
+}
+
+void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint8_t tunnel)
+{
+    vertex_t *u;
+    if (v->ypos > 0) {
+        if (v->xpos > 0) {
+            if (hardness[v->ypos - 1][v->xpos - 1] != 0xFF && (tunnel || map[v->ypos - 1][v->xpos - 1] != ' ')) {
+                u = malloc(sizeof(vertex_t));
+                u->ypos = v->ypos - 1;
+                u->xpos = v->xpos - 1;
+                stack_push(s, u);
+            }
+        }
+        if (hardness[v->ypos - 1][v->xpos] != 0xFF && (tunnel || map[v->ypos - 1][v->xpos] != ' ')) {
+            u = malloc(sizeof(vertex_t));
+            u->ypos = v->ypos - 1;
+            u->xpos = v->xpos;
+            stack_push(s, u);
+        }
+        if (v->xpos < W_WIDTH - 1) {
+            if (hardness[v->ypos - 1][v->xpos + 1] != 0xFF && (tunnel || map[v->ypos - 1][v->xpos + 1] != ' ')) {
+                u = malloc(sizeof(vertex_t));
+                u->ypos = v->ypos - 1;
+                u->xpos = v->xpos + 1;
+                stack_push(s, u);
             }
         }
     }
-    stack_delete(&s);
-    priority_queue_delete(&q);
-}
-
-void get_neighbors(stack_t *s, vertex_t v, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint8_t tunnel)
-{
-    vertex_t u;
-    if (v.ypos > 0) {
-        u.ypos = v.ypos - 1;
-        if (v.xpos > 0) {
-            u.xpos = v.xpos - 1;
-            if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
-        }
-        u.xpos = v.xpos;
-        if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
-        if (v.xpos < W_WIDTH - 1) {
-            u.xpos = v.xpos + 1;
-            if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
+    if (v->xpos > 0) {
+        if (hardness[v->ypos][v->xpos - 1] != 0xFF && (tunnel || map[v->ypos][v->xpos - 1] != ' ')) {
+            u = malloc(sizeof(vertex_t));
+            u->ypos = v->ypos;
+            u->xpos = v->xpos - 1;
+            stack_push(s, u);
         }
     }
-    u.ypos = v.ypos;
-    if (v.xpos > 0) {
-        u.xpos = v.xpos - 1;
-        if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
-    }
-    if (v.xpos < W_WIDTH - 1) {
-        u.xpos = v.xpos + 1;
-        if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
-    }
-    if (v.ypos < W_HEIGHT) {
-        u.ypos = v.ypos + 1;
-        if (v.xpos > 0) {
-            u.xpos = v.xpos - 1;
-            if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
+    if (v->xpos < W_WIDTH - 1) {
+        if (hardness[v->ypos][v->xpos + 1] != 0xFF && (tunnel || map[v->ypos][v->xpos + 1] != ' ')) {
+            u = malloc(sizeof(vertex_t));
+            u->ypos = v->ypos;
+            u->xpos = v->xpos + 1;
+            stack_push(s, u);
         }
-        u.xpos = v.xpos;
-        if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
-        if (v.xpos < W_WIDTH - 1) {
-            u.xpos = v.xpos + 1;
-            if (hardness[u.ypos][u.xpos] != 0xFF && (tunnel || map[u.ypos][u.xpos] != ' ')) stack_push(s, u);
+    }
+    if (v->ypos < W_HEIGHT) {
+        if (v->xpos > 0) {
+            if (hardness[v->ypos + 1][v->xpos - 1] != 0xFF && (tunnel || map[v->ypos + 1][v->xpos - 1] != ' ')) {
+                u = malloc(sizeof(vertex_t));
+                u->ypos = v->ypos + 1;
+                u->xpos = v->xpos - 1;
+                stack_push(s, u);
+            }
+        }
+        if (hardness[v->ypos + 1][v->xpos] != 0xFF && (tunnel || map[v->ypos + 1][v->xpos] != ' ')) {
+            u = malloc(sizeof(vertex_t));
+            u->ypos = v->ypos + 1;
+            u->xpos = v->xpos;
+            stack_push(s, u);
+        }
+        if (v->xpos < W_WIDTH - 1) {
+            if (hardness[v->ypos + 1][v->xpos + 1] != 0xFF && (tunnel || map[v->ypos + 1][v->xpos + 1] != ' ')) {
+                u = malloc(sizeof(vertex_t));
+                u->ypos = v->ypos + 1;
+                u->xpos = v->xpos + 1;
+                stack_push(s, u);
+            }
         }
     }
 }
