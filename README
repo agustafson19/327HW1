@@ -1,15 +1,29 @@
 Name: Arvid Gustafson
 
-vertex.h contains a vertex_t struct, consisting of an x position and y position.
+Added a --nummon switch.
 
-vertex.c contains the method vertex_equal, used determine if two verticies are equal.
+Added a vector struct, which functions the same as a vertex, but allows for negative numbers
 
-stack.h and stack.c together contain an implementation of a stack. The value each node stores is a vertex_t, and there is no stack_is_empty function; otherwise, it is identical to the stack made by Jeremy Shaffer on 2/23/2021.
+Added a character struct, which functions as a character, which could be the player of a mosnter
+    - Specialization between the character and monster data hasn't been done yet
 
-priority_queue.h and priority_queue.c together contain an array implementation of a binary min heap of the type vertex_t. Its functions are essencially identical to the stacks, except there is no peek function, and there is a function priority_queue_decrease_priority.
+Added the init_character_map function, which initialises a character map
 
-The djikstra function is used to populate a distance array.
+Added the init_player function, which initialises the player
 
-get_neighbors is used only within the djiksta function, to populate a stack with the neighbors of a certain array.
+Added the generate_monsters function, which generates all of the monsters
 
-draw_distance is used to draw a distance array.
+Added the init_distance_map, which initializes a distance map
+    - This should be unnecessary, but was added durring debugging, and does not break anything
+
+Reversed the dijkstra function
+
+Altered the get_neighbors function to ignore the edges
+
+Added the draw_win, which draws a basic win message
+
+Added the draw_loose funciton, which draws a basic lose message
+    - Typo does not break code
+
+Implemented all move and combat logic within the main function
+    - Will modularise later

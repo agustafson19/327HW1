@@ -1,3 +1,62 @@
+commit 00a2f48622d5b5a3838e5b85aa2d6e9b51cd839b
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Thu Mar 4 11:21:03 2021 -0600
+
+    Finnished Part 4 of Assignment 1
+    
+    Implemented a move sequence using two heaps. Added methods that print a
+    win and loose message. Player moves randomly and does not tunnel.
+    Implemented monster movement to specification, reversed dijkstra's
+    algorithm for that to happen. Revised the git_neighbor method to ignore
+    the boarder.
+
+commit c08f535235495038a3558177c749ec7e9ba631e8
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 3 15:41:02 2021 -0600
+
+    Added monster generation
+    
+    Monsters now generate; the number of monsters spawned can be chosen with
+    --nummon; the default number of monsters spawned is 10; the heap was
+    modified to free each of its members once deleted.
+    
+    Note: non-tunneling monsters only spawn within rooms, and do not spawn
+    within corrodors, while tunneling monsters can spawn everywhere. This
+    was done to increase the chance of a non-tunneling monster spawning, to
+    bring it closer to fifty percent.
+
+commit 9da4f4e0bcfedf90d19ae94e2679d0380b3231ce
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 3 12:56:25 2021 -0600
+
+    Prepared for part four
+    
+    Changed priority_queue to heap, made stack and heap use void pointers,
+    fixed how files include other files, re-wroked the makefile, created an
+    archive folder for all the archives that I will submit for each part of
+    this assignment, added a --nummon switch, and made the program print the
+    num_monsters value.
+
+commit 3ddbf202f77aeed4a1ff29fcc1a7f15ff14c0fbe
+Author: agustafson19 <40578471+agustafson19@users.noreply.github.com>
+Date:   Wed Mar 3 09:23:45 2021 -0600
+
+    Added instructions for part 4
+
+commit 4bf25380da985a7b938413ac26f24d89b81fb7d9
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Feb 24 21:40:52 2021 -0600
+
+    Updated Submission
+    
+    There were some problems with typos.
+
+commit 43d6acd3742bec518bf487ad3d06cb3e6ff4edc4
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Feb 24 21:40:05 2021 -0600
+
+    Added Changelog
+
 commit ff2e0b3b650e863a6a53b3951743ea81a38227f3
 Author: agustafson19 <arvidg@iastate.edu>
 Date:   Wed Feb 24 21:37:06 2021 -0600
