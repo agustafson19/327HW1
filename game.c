@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <stdint.h>
+#include <unistd.h>
 
 #include <endian.h>
 
@@ -21,8 +22,10 @@
 #define SMART 0x01
 #define TELE 0x02
 #define TUNNEL 0x04
-#define ERATIC 0x08
+#define ERRATIC 0x08
 #define ALIVE 0x10
+#define KNOWN 0x20
+#define SEE 0x40
 
 typedef struct room {
     uint8_t xpos;
@@ -31,6 +34,11 @@ typedef struct room {
     uint8_t ysize;
 } room_t;
 
+typedef struct vector {
+    int xpos;
+    int ypos;
+} vector_t;
+
 typedef struct character {
     uint8_t xpos;
     uint8_t ypos;
@@ -38,6 +46,7 @@ typedef struct character {
     uint16_t sequence;
     uint8_t characteristics;
     uint8_t speed;
+    vertex_t known_location;
 } character_t;
 
 void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_monsters);
@@ -53,9 +62,10 @@ void init_map(char map[W_HEIGHT][W_WIDTH], char c);
 void sketch_map(char display[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
 
 void init_character_map(character_t *character_map[W_HEIGHT][W_WIDTH]);
-void init_player(heap_t characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player);
+void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player);
 void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], room_t *rooms, uint16_t num_rooms, uint16_t num_monsters);
 
+void init_distance_map(uint16_t distance[W_HEIGHT][W_WIDTH], uint16_t value);
 void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], character_t *player, uint16_t distance[W_HEIGHT][W_WIDTH], uint8_t tunnel);
 void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint8_t tunnel);
 
@@ -64,6 +74,9 @@ void place_characters(char display[W_HEIGHT][W_WIDTH], character_t *characters[W
 
 void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
 void draw(char display[W_HEIGHT][W_WIDTH]);
+
+void draw_win();
+void draw_loose();
 
 int main(int argc, char *argv[])
 {
@@ -76,6 +89,7 @@ int main(int argc, char *argv[])
     uint8_t hardness[W_HEIGHT][W_WIDTH];
     uint16_t floor_distance[W_HEIGHT][W_WIDTH];
     uint16_t tunnel_distance[W_HEIGHT][W_WIDTH];
+    uint16_t custom_distance[W_HEIGHT][W_WIDTH];
     uint16_t num_rooms;
     room_t *rooms;
     uint16_t num_u_stairs;
@@ -84,6 +98,18 @@ int main(int argc, char *argv[])
     character_t *d_stairs;
     uint16_t num_monsters;
     heap_t characters;
+    uint32_t priority;
+    uint32_t next_priority;
+    heap_t next_turn;
+    character_t *character;
+    vertex_t hither;
+    vertex_t *thither;
+    stack_t move_stack;
+    heap_t move_heap;
+    int i;
+    character_t ghost_player;
+    vector_t direction;
+    double slope;
     character_t *character_map[W_HEIGHT][W_WIDTH];
     char map[W_HEIGHT][W_WIDTH];
     char display[W_HEIGHT][W_WIDTH];
@@ -106,22 +132,270 @@ int main(int argc, char *argv[])
     /* Generating Characters */
     heap_init(&characters);
     init_character_map(character_map);
-    init_player(characters, character_map, player);
+    init_player(&characters, character_map, player);
+    // printf("Generated @, speed 10, at (%hd,%hd)\n", player->xpos, player->ypos);
     if (!(args & NUMMON))
         num_monsters = 10;
     num_monsters = num_monsters < 1481 ? num_monsters : 1481;
     generate_monsters(&characters, character_map, map, rooms, num_rooms, num_monsters);
 
-    /* Finding Distances */
+    /* Finding Initial Distances */
+    init_distance_map(floor_distance, 0);
+    init_distance_map(tunnel_distance, 0);
     dijkstra(hardness, map, player, floor_distance, 0);
     dijkstra(hardness, map, player, tunnel_distance, 1);
 
-    /* Displaying */
+    /* Main Loop */
+    // printf("Entering Main Loop\n");
+    while (player->characteristics & ALIVE && heap_size(&characters) > 1) {
+        heap_init(&next_turn);
+        /* Derive Turn Queue */
+        heap_peek(&characters, (void**) &character, &priority);
+        // printf("Obtaining all characters with priority: %hd\n", priority);
+        do {
+            heap_extract_min(&characters, (void**) &character);
+            heap_add(&next_turn, character, character->sequence);
+            heap_peek(&characters, (void**) &character, &next_priority);
+        } while (next_priority == priority && heap_size(&characters) > 0);
+        /* Character Turn */
+        while (heap_size(&next_turn) > 0) {
+            heap_extract_min(&next_turn, (void**) &character);
+            /*
+        heap_peek(&characters, (void**) &character, &priority);
+        heap_extract_min(&characters, (void**) &character);
+        if (!(character->characteristics & ALIVE)) {
+            free(character);
+        }
+        else {
+            */
+            if (character->characteristics & ALIVE) {
+                heap_add(&characters, character, priority + 1000 / character->speed);
+                if (character == player) {
+                    /* If Player */
+                    sketch_map(display, map);
+                    place(display, u_stairs, num_u_stairs);
+                    place(display, d_stairs, num_d_stairs);
+                    place_characters(display, character_map);
+                    // printf("Player Character: (%hd,%hd)\n", player->xpos, player->ypos);
+                    draw(display);
+                    usleep(250000);
+                    stack_init(&move_stack);
+                    hither.xpos = character->xpos;
+                    hither.ypos = character->ypos;
+                    get_neighbors(&move_stack, &hither, map, hardness, character->characteristics & TUNNEL);
+                    for (i = rand() % stack_size(&move_stack); i > 0; i--) {
+                        stack_pop(&move_stack, (void**) &thither);
+                        free(thither);
+                    }
+                    stack_pop(&move_stack, (void**) &thither);
+                    stack_delete(&move_stack);
+                    if (map[thither->ypos][thither->xpos] != ' ') {
+                        /* [COMBAT] */
+                        if (character_map[thither->ypos][thither->xpos] != NULL && character_map[thither->ypos][thither->xpos] != character) {
+                            // printf("%c killed %c\n", character->symbol, character_map[thither->ypos][thither->xpos]->symbol);
+                            character_map[thither->ypos][thither->xpos]->characteristics &= ~ALIVE;
+                        }
+                        character_map[hither.ypos][hither.xpos] = NULL;
+                        character_map[thither->ypos][thither->xpos] = character;
+                        character->xpos = thither->xpos;
+                        character->ypos = thither->ypos;
+                    }
+                    free(thither);
+                    dijkstra(hardness, map, player, floor_distance, 0);
+                    dijkstra(hardness, map, player, tunnel_distance, 1);
+                }
+                else {
+                    /* If Monster */
+                    stack_init(&move_stack);
+                    hither.xpos = character->xpos;
+                    hither.ypos = character->ypos;
+                    get_neighbors(&move_stack, &hither, map, hardness, character->characteristics & TUNNEL);
+                    thither = malloc(sizeof(vertex_t));
+                    thither->xpos = hither.xpos;
+                    thither->ypos = hither.ypos;
+                    stack_push(&move_stack, thither);
+                    /* Erratic Behaviour */
+                    if ((character->characteristics & ERRATIC) && (rand() % 2)) {
+                        // printf("%c is begaving erratically\n", character->symbol);
+                        for (i = rand() % stack_size(&move_stack); i > 0; i--) {
+                            stack_pop(&move_stack, (void**) &thither);
+                            free(thither);
+                        }
+                        stack_pop(&move_stack, (void**) &thither);
+                    }
+                    /* Non-erratic Behaviour */
+                    else {
+                        /* Testing Line of Sight */
+                        character->characteristics |= SEE;
+                        if (player->xpos - character->xpos) {
+                            slope = ((double) player->ypos - (double) character->ypos) / ((double) player->xpos - (double) character->xpos);
+                            if (!(slope > 1.0 || slope < -1.0)) {
+                                for (i = 0; i <= (int) (player->xpos) - (int) (character->xpos); i++) {
+                                    // printf("(%d,%d)\n", character->xpos + i, character->ypos + (int) (slope * i));
+                                    if (map[character->ypos + (int) (slope * i)][character->xpos + i] == ' ') {
+                                        // printf("Failure on sight 1\n");
+                                        character->characteristics &= ~SEE;
+                                    }
+                                }
+                                for (i = 0; i <= (int) (character->xpos) - (int) (player->xpos); i++) {
+                                    // printf("(%d,%d)\n", player->xpos + i, player->ypos + (int) (slope * i));
+                                    if (map[player->ypos + (int) (slope * i)][player->xpos + i] == ' ') {
+                                        // printf("Failure on sight 2\n");
+                                        character->characteristics &= ~SEE;
+                                    }
+                                }
+                            }
+                        }
+                        if (player->ypos - character->ypos) {
+                            slope = (player->xpos - character->xpos) / (player->ypos - character->ypos);
+                            if (!(slope > 1.0 || slope < -1.0)) {
+                                for (i = 0; i <= (int) (player->ypos) - (int) (character->ypos); i++) {
+                                    // printf("(%d,%d)\n", character->ypos + i, character->xpos + (int) (slope * i));
+                                    if (map[character->ypos + i][character->xpos + (int) (slope * i)] == ' ') {
+                                        // printf("Failure on sight 3\n");
+                                        character->characteristics &= ~SEE;
+                                    }
+                                }
+                                for (i = 0; i <= (int) (character->ypos) - (int) (player->ypos); i++) {
+                                    // printf("(%d,%d)\n", player->xpos + (int) (slope * i), player->ypos + i);
+                                    if (map[player->ypos + i][player->xpos + (int) (slope * i)] == ' ') {
+                                        // printf("Failure on sight 4\n");
+                                        character->characteristics &= ~SEE;
+                                    }
+                                }
+                            }
+                        }
+                        // printf("Line Of Sight: %hd\n", !!(character->characteristics & SEE));
+                        /* For Smart To Know */
+                        if (character->characteristics & SMART && character->characteristics & SEE) {
+                            // printf("%c Recording Knowledge\n", character->symbol);
+                            character->characteristics |= KNOWN;
+                            character->known_location.xpos = player->xpos;
+                            character->known_location.ypos = player->ypos;
+                        }
+                        /* Telepathic or Sees */
+                        if (character->characteristics & TELE || character->characteristics & SEE) {
+                            /* Smart */
+                            if (character->characteristics & SMART) {
+                                heap_init(&move_heap);
+                                while (stack_size(&move_stack) > 0) {
+                                    stack_pop(&move_stack, (void**) &thither);
+                                    // printf("Considering neighbor (%hd,%hd)\n", thither->xpos, thither->ypos);
+                                    if (character->characteristics & TUNNEL)
+                                        heap_add(&move_heap, thither, tunnel_distance[thither->ypos][thither->xpos]);
+                                    else
+                                        heap_add(&move_heap, thither, floor_distance[thither->ypos][thither->xpos]);
+                                }
+                                heap_extract_min(&move_heap, (void**) &thither);
+                                heap_delete(&move_heap);
+                            }
+                            /* Not Smart */
+                            else {
+                                i = 1;
+                                direction.xpos = (int) (player->xpos) - (int) (character->xpos);
+                                direction.ypos = (int) (player->ypos) - (int) (character->ypos);
+                                direction.xpos = direction.xpos > 1 ? 1 : direction.xpos;
+                                direction.xpos = direction.xpos < -1 ? -1 : direction.xpos;
+                                direction.ypos = direction.ypos > 1 ? 1 : direction.ypos;
+                                direction.ypos = direction.ypos < -1 ? -1 : direction.ypos;
+                                // printf("Moving in direction: <%d,%d>\n", direction.xpos, direction.ypos);
+                                while (stack_size(&move_stack) > 0) {
+                                    stack_pop(&move_stack, (void**) &thither);
+                                    // printf("Considering neighbor (%hd,%hd)\n", thither->xpos, thither->ypos);
+                                    if ((thither->xpos == (direction.xpos + hither.xpos)) && (thither->ypos == (direction.ypos + hither.ypos))) {
+                                        // printf("Chosen neighbor (%hd,%hd)\n", thither->xpos, thither->ypos);
+                                        i = 0;
+                                        break;
+                                    }
+                                    free(thither);
+                                }
+                                if (i) {
+                                    thither = malloc(sizeof(vertex_t));
+                                    thither->xpos = hither.xpos;
+                                    thither->ypos = hither.ypos;
+                                }
+                            }
+                        }
+                        /* Not Telepathic and Not See*/
+                        else {
+                            /* Knows */
+                            if (character->characteristics & KNOWN) {
+                                ghost_player.xpos = character->known_location.xpos;
+                                ghost_player.ypos = character->known_location.ypos;
+                                dijkstra(hardness, map, &ghost_player, custom_distance, character->characteristics & TUNNEL);
+                                heap_init(&move_heap);
+                                while (stack_size(&move_stack) > 0) {
+                                    stack_pop(&move_stack, (void**) &thither);
+                                    if (character->characteristics & TUNNEL)
+                                        heap_add(&move_heap, thither, tunnel_distance[thither->ypos][thither->xpos]);
+                                    else
+                                        heap_add(&move_heap, thither, floor_distance[thither->ypos][thither->xpos]);
+                                }
+                                heap_extract_min(&move_heap, (void**) &thither);
+                                heap_delete(&move_heap);
+                            }
+                            /* Doesn't Know */
+                            else {
+                                for (i = rand() % stack_size(&move_stack); i > 0; i--) {
+                                    stack_pop(&move_stack, (void**) &thither);
+                                    free(thither);
+                                }
+                                stack_pop(&move_stack, (void**) &thither);
+                            }
+                        }
+                    }
+                    // printf("Moving from (%hd,%hd) to (%hd,%hd)\n", hither.xpos, hither.ypos, thither->xpos, thither->ypos);
+                    // printf("Tile: %c\n", map[thither->ypos][thither->xpos]);
+                    stack_delete(&move_stack);
+                    /* If thither is rock and the character can tunnel */
+                    if (map[thither->ypos][thither->xpos] == ' ' && character->characteristics & TUNNEL) {
+                        hardness[thither->ypos][thither->xpos] -= hardness[thither->ypos][thither->xpos] < 85 ? hardness[thither->ypos][thither->xpos] : 85;
+                        dijkstra(hardness, map, player, tunnel_distance, 1);
+                        if (hardness[thither->ypos][thither->xpos] == 0) {
+                            map[thither->ypos][thither->xpos] =  '#';
+                            dijkstra(hardness, map, player, floor_distance, 0);
+                        }
+                        else {
+                            map[thither->ypos][thither->xpos] =  ' ';
+                        }
+                    }
+                    /* If thither is not rock */
+                    if (map[thither->ypos][thither->xpos] != ' ') {
+                        /* [COMBAT] */
+                        if (character_map[thither->ypos][thither->xpos] != NULL && character_map[thither->ypos][thither->xpos] != character) {
+                            // printf("%c killed %c\n", character->symbol, character_map[thither->ypos][thither->xpos]->symbol);
+                            character_map[thither->ypos][thither->xpos]->characteristics &= ~ALIVE;
+                        }
+                        character_map[hither.ypos][hither.xpos] = NULL;
+                        character_map[thither->ypos][thither->xpos] = character;
+                        character->xpos = thither->xpos;
+                        character->ypos = thither->ypos;
+                    }
+                    free(thither);
+                }
+            }
+            else {
+                if (character_map[character->ypos][character->xpos] == character)
+                    character_map[character->ypos][character->xpos] = NULL;
+                // printf("Freeing: %c\n", character->symbol);
+                free(character);
+            }
+        }
+        heap_delete(&next_turn);
+    }
+
+    /* Final Drawing */
     sketch_map(display, map);
     place(display, u_stairs, num_u_stairs);
     place(display, d_stairs, num_d_stairs);
     place_characters(display, character_map);
     draw(display);
+
+    /* Printing Results */
+    if (player->characteristics & ALIVE)
+        draw_win();
+    else
+        draw_loose();
 
     /* Cleaning Memory */
     free(rooms);
@@ -404,12 +678,13 @@ void init_character_map(character_t *character_map[W_HEIGHT][W_WIDTH])
     }
 }
 
-void init_player(heap_t characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player)
+void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player)
 {
     player->sequence = 0;
+    player->characteristics = 0x00;
     player->characteristics |= ALIVE;
     player->speed = 10;
-    heap_add(&characters, player, 1000 / player->speed);
+    heap_add(characters, player, 0);
     character_map[player->ypos][player->xpos] = player;
 }
 
@@ -424,9 +699,13 @@ void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][
             monster->characteristics |= rand() % 2 ? SMART : 0x00;
             monster->characteristics |= rand() % 2 ? TELE : 0x00;
             monster->characteristics |= rand() % 2 ? TUNNEL : 0x00;
-            monster->characteristics |= rand() % 2 ? ERATIC : 0x00;
+            monster->characteristics |= rand() % 2 ? ERRATIC : 0x00;
             monster->symbol = monster->characteristics < 10 ? '0' + monster->characteristics : monster->characteristics - 10 + 'a';
             monster->characteristics |= ALIVE;
+            monster->characteristics &= ~KNOWN;
+            monster->characteristics &= ~SEE;
+            monster->known_location.xpos = 0;
+            monster->known_location.ypos = 0;
             monster->sequence = i;
             monster->speed = 5 + rand() % 16;
             if (monster->characteristics & TUNNEL) {
@@ -439,15 +718,28 @@ void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][
                 monster->ypos = rooms[j].ypos + rand() % rooms[j].ysize;
             }
         } while (character_map[monster->ypos][monster->xpos] != NULL || (!(monster->characteristics & TUNNEL) && (map[monster->ypos][monster->xpos] == ' ')));
-        heap_add(characters, monster, 1000 / monster->speed);
+        /*
+         printf("Generated %c, speed %d, at (%hd,%hd)\n", monster->symbol, monster->speed, monster->xpos, monster->ypos);
+         */
+        heap_add(characters, monster, 0);
         character_map[monster->ypos][monster->xpos] = monster;
+    }
+}
+
+void init_distance_map(uint16_t distance[W_HEIGHT][W_WIDTH], uint16_t value)
+{
+    uint8_t i, j;
+    for (i = 0; i < W_HEIGHT; i++) {
+        for (j = 0; j < W_WIDTH; j++) {
+            distance[i][j] = value;
+        }
     }
 }
 
 void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], character_t* player, uint16_t distance[W_HEIGHT][W_WIDTH], uint8_t tunnel)
 {
     uint8_t i, j;
-    uint16_t temp;
+    uint32_t temp;
     vertex_t *v, *u;
     stack_t s;
     heap_t h;
@@ -468,6 +760,7 @@ void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], 
         }
     }
     while (heap_size(&h) > 0) {
+        heap_peek(&h, (void**) &u, &temp);
         heap_extract_min(&h, (void**) &u);
         if (temp == 0xFFFF) {
             free(u);
@@ -476,8 +769,8 @@ void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], 
         get_neighbors(&s, u, map, hardness, tunnel);
         while (stack_size(&s) > 0) {
             stack_pop(&s, (void**) &v);
-            if (map[u->ypos][u->xpos] == ' ')
-                temp = distance[u->ypos][u->xpos] + 1 + hardness[u->ypos][u->xpos] / 85;
+            if (map[v->ypos][v->xpos] == ' ')
+                temp = distance[u->ypos][u->xpos] + 1 + hardness[v->ypos][v->xpos] / 85;
             else
                 temp = distance[u->ypos][u->xpos] + 1;
             if (temp < distance[v->ypos][v->xpos]) {
@@ -495,8 +788,8 @@ void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], 
 void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint8_t tunnel)
 {
     vertex_t *u;
-    if (v->ypos > 0) {
-        if (v->xpos > 0) {
+    if (v->ypos > 1) {
+        if (v->xpos > 1) {
             if (hardness[v->ypos - 1][v->xpos - 1] != 0xFF && (tunnel || map[v->ypos - 1][v->xpos - 1] != ' ')) {
                 u = malloc(sizeof(vertex_t));
                 u->ypos = v->ypos - 1;
@@ -510,7 +803,7 @@ void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t
             u->xpos = v->xpos;
             stack_push(s, u);
         }
-        if (v->xpos < W_WIDTH - 1) {
+        if (v->xpos < W_WIDTH - 2) {
             if (hardness[v->ypos - 1][v->xpos + 1] != 0xFF && (tunnel || map[v->ypos - 1][v->xpos + 1] != ' ')) {
                 u = malloc(sizeof(vertex_t));
                 u->ypos = v->ypos - 1;
@@ -519,7 +812,7 @@ void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t
             }
         }
     }
-    if (v->xpos > 0) {
+    if (v->xpos > 1) {
         if (hardness[v->ypos][v->xpos - 1] != 0xFF && (tunnel || map[v->ypos][v->xpos - 1] != ' ')) {
             u = malloc(sizeof(vertex_t));
             u->ypos = v->ypos;
@@ -527,7 +820,7 @@ void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t
             stack_push(s, u);
         }
     }
-    if (v->xpos < W_WIDTH - 1) {
+    if (v->xpos < W_WIDTH - 2) {
         if (hardness[v->ypos][v->xpos + 1] != 0xFF && (tunnel || map[v->ypos][v->xpos + 1] != ' ')) {
             u = malloc(sizeof(vertex_t));
             u->ypos = v->ypos;
@@ -536,7 +829,7 @@ void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t
         }
     }
     if (v->ypos < W_HEIGHT) {
-        if (v->xpos > 0) {
+        if (v->xpos > 1) {
             if (hardness[v->ypos + 1][v->xpos - 1] != 0xFF && (tunnel || map[v->ypos + 1][v->xpos - 1] != ' ')) {
                 u = malloc(sizeof(vertex_t));
                 u->ypos = v->ypos + 1;
@@ -550,7 +843,7 @@ void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t
             u->xpos = v->xpos;
             stack_push(s, u);
         }
-        if (v->xpos < W_WIDTH - 1) {
+        if (v->xpos < W_WIDTH - 2) {
             if (hardness[v->ypos + 1][v->xpos + 1] != 0xFF && (tunnel || map[v->ypos + 1][v->xpos + 1] != ' ')) {
                 u = malloc(sizeof(vertex_t));
                 u->ypos = v->ypos + 1;
@@ -607,4 +900,14 @@ void draw(char display[W_HEIGHT][W_WIDTH])
         }
         printf("\n");
     }
+}
+
+void draw_win() {
+    printf("\n");
+    printf("Thou hast won!\n");
+}
+
+void draw_loose() {
+    printf("\n");
+    printf("Thou hast lost.\n");
 }

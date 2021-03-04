@@ -14,6 +14,7 @@ int stack_delete(stack_t *s)
     stack_node_t *n;
     for (n = s->top; n; n = s->top) {
         s->top = n->next;
+        free(n->value);
         free(n);
     }
     return 0;

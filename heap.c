@@ -7,15 +7,15 @@
 
 int heap_init(heap_t *h)
 {
-    h->nodes = malloc(sizeof(heap_node_t) * 20);
     h->length = 20;
+    h->nodes = malloc(sizeof(heap_node_t) * h->length);
     h->size = 0;
     return 0;
 }
 
 int heap_delete(heap_t *h)
 {
-    uint16_t i;
+    uint32_t i;
     for (i = 0; i < h->size; i++) {
         free(h->nodes[i].value);
     }
@@ -23,9 +23,9 @@ int heap_delete(heap_t *h)
     return 0;
 }
 
-int heap_add(heap_t *h, void *value, uint16_t priority)
+int heap_add(heap_t *h, void *value, uint32_t priority)
 {
-    int i = h->size;
+    uint32_t i = h->size;
     heap_node_t temp;
     h->size++;
     if (h->size >= h->length) {
@@ -43,9 +43,9 @@ int heap_add(heap_t *h, void *value, uint16_t priority)
     return 0;
 }
 
-int heap_decrease_priority_vertex(heap_t *h, void *value, uint16_t priority)
+int heap_decrease_priority_vertex(heap_t *h, void *value, uint32_t priority)
 {
-    int i;
+    uint32_t i;
     heap_node_t temp;
     for (i = 0; i < h->size; i++) {
         if (vertex_equal(*((vertex_t*) value), *((vertex_t*) h->nodes[i].value)))
@@ -63,7 +63,7 @@ int heap_decrease_priority_vertex(heap_t *h, void *value, uint16_t priority)
     return 0;
 }
 
-int heap_peek(heap_t *h, void **value, uint16_t *priority)
+int heap_peek(heap_t *h, void **value, uint32_t *priority)
 {
     if (h->size == 0)
         return 1;
@@ -74,7 +74,7 @@ int heap_peek(heap_t *h, void **value, uint16_t *priority)
 
 int heap_extract_min(heap_t *h, void **value)
 {
-    int i = 0, j;
+    uint32_t i = 0, j;
     heap_node_t temp;
     if (h->size <= 0) {
         return 1;
