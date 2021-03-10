@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -97,10 +96,12 @@ int heap_extract_min(heap_t *h, void **value)
         h->nodes[j] = temp;
         i = j;
     }
-    if (h->length > 20 && h->length > h->size*4) {
+    /*
+    if (h->length > 20 && h->length > h->size * 4) {
         h->length /= 2;
         h->nodes = realloc(h->nodes, sizeof(h->nodes) * h->length);
     }
+    */
     return 0;
 }
 
