@@ -1,3 +1,56 @@
+commit 32412403eb384209d14426b16c49762aaa0b649a
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 10 19:57:10 2021 -0600
+
+    Updated the README
+    
+    Updated the README with relevant information
+
+commit 6ed9f2a56e9bcb752b5738e4081579bc208a2326
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 10 19:40:34 2021 -0600
+
+    Updated makefile
+    
+    Updated the makefile to include the ncurses library.
+
+commit 41cd153533e8f3b2b2cbf8ee83b7c536c95c67f0
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 10 19:37:30 2021 -0600
+
+    Finnished Code for Assignment 1.05
+    
+    Implemented all requisite code for assignment 1.05.
+
+commit 6ad68422008004c0aa26d05e7b4edc323d1a2200
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 10 13:57:32 2021 -0600
+
+    Modularised Code from 1.04
+    
+    Put the code from 1.04 into a collection of functions. Additionally, I
+    fixed a bug from 1.04 that caused a core-corrupted error when there are
+    more than 18 mostners by disabling the ability of the binary min-heap to
+    contract.
+
+commit 4ee64e382db61614ddf8e3a92a200155f3115013
+Author: agustafson19 <40578471+agustafson19@users.noreply.github.com>
+Date:   Wed Mar 10 09:11:16 2021 -0600
+
+    Added Part 5 Instructions
+
+commit a4973bd0d8751dc13f44eceee42b86878fdd8791
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Thu Mar 4 12:36:49 2021 -0600
+
+    Added file to turn in
+
+commit c8f9209c7bc3b9b69644897a96621aeb35ff2278
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Thu Mar 4 12:34:52 2021 -0600
+
+    Updated CHANGELOG
+
 commit f2b49c5a84aa850c7ed5d94f3a22cdbd2f78d3b4
 Author: agustafson19 <arvidg@iastate.edu>
 Date:   Thu Mar 4 12:31:46 2021 -0600
