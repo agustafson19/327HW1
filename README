@@ -1,29 +1,35 @@
-Name: Arvid Gustafson
+Name: Arvid Gustafson.
 
-Added a --nummon switch.
+QUIT, WALK_DOWN, WALK_UP, RESET, MON_LIST and ESCAPE are masks that take advantage of the player's characteristics variable.
 
-Added a vector struct, which functions the same as a vertex, but allows for negative numbers
+Note: Code from 1.04 was just now split into different functions.
 
-Added a character struct, which functions as a character, which could be the player of a mosnter
-    - Specialization between the character and monster data hasn't been done yet
+init_ncurses initializes ncurses.
 
-Added the init_character_map function, which initialises a character map
+deinit_ncurses deinitializes ncurses.
 
-Added the init_player function, which initialises the player
+derive_next_turn_heap derives the next turn heap.
 
-Added the generate_monsters function, which generates all of the monsters
+derive move stack derives the move stack.
 
-Added the init_distance_map, which initializes a distance map
-    - This should be unnecessary, but was added durring debugging, and does not break anything
+player_command fetches the command from the player.
 
-Reversed the dijkstra function
+monster_turn executes the turn of a monster.
 
-Altered the get_neighbors function to ignore the edges
+line_of_sight finds if a monster can see the player.
 
-Added the draw_win, which draws a basic win message
+smart_move picks the cell a smart monster would move to.
 
-Added the draw_loose funciton, which draws a basic lose message
-    - Typo does not break code
+dumb_move picks the cell a dumb monster would move to.
 
-Implemented all move and combat logic within the main function
-    - Will modularise later
+random_move picks a random cell a monster could move to.
+
+tunnel decreases the hardness of a rock.
+
+move_character actually moves a character; combat is done here.
+
+monster_list brings up the monster list.
+
+monster_list_command fetches the command from the player for when within the monster_list.
+
+draw_quit draws a message for when the player quits.
