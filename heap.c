@@ -18,6 +18,7 @@ int heap_delete(heap_t *h)
     for (i = 0; i < h->size; i++) {
         free(h->nodes[i].value);
     }
+    h->size = 0;
     free(h->nodes);
     return 0;
 }

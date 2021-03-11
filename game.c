@@ -8,6 +8,8 @@
 
 #include <endian.h>
 
+#include <ncurses.h>
+
 #include "vertex.h"
 #include "stack.h"
 #include "heap.h"
@@ -17,7 +19,7 @@
 
 #define SAVE 0x01
 #define LOAD 0x02
-#define NUMMON 0x04
+#define NUM_MON 0x04
 
 #define SMART 0x01
 #define TELE 0x02
@@ -26,6 +28,14 @@
 #define ALIVE 0x10
 #define KNOWN 0x20
 #define SEE 0x40
+
+#define QUIT 0x01
+#define WALK_DOWN 0x02
+#define WALK_UP 0x04
+#define RESET 0x08
+/* ALIVE is reserved */
+#define MON_LIST 0x20
+#define ESCAPE 0x40
 
 typedef struct room {
     uint8_t xpos;
@@ -49,7 +59,7 @@ typedef struct character {
     vertex_t known_location;
 } character_t;
 
-void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_monsters);
+void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_init_monsters);
 
 void generate(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, character_t **u_stairs, uint16_t *num_d_stairs, character_t **d_stairs);
 
@@ -58,12 +68,15 @@ void load(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *n
 
 void map_rooms(char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms);
 
+void init_ncurses();
+void deinit_ncurses();
+
 void init_map(char map[W_HEIGHT][W_WIDTH], char c);
 void sketch_map(char display[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
 
 void init_character_map(character_t *character_map[W_HEIGHT][W_WIDTH]);
 void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player);
-void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], room_t *rooms, uint16_t num_rooms, uint16_t num_monsters);
+void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], room_t *rooms, uint16_t num_rooms, uint16_t num_init_monsters);
 
 void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], character_t *player, uint16_t distance[W_HEIGHT][W_WIDTH], uint8_t tunnel);
 void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint8_t tunnel);
@@ -71,7 +84,8 @@ void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t
 void derive_next_turn_heap(heap_t *characters, heap_t *next_turn, uint32_t *priority);
 void derive_move_stack(stack_t *move_stack, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], character_t *character, vertex_t *hither, vertex_t **thither);
 
-void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t floor_distance[W_HEIGHT][W_WIDTH], uint16_t tunnel_distance[W_HEIGHT][W_WIDTH], vertex_t *hither, vertex_t **thither);
+void player_command(character_t *player, vertex_t *thither);
+void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t floor_distance[W_HEIGHT][W_WIDTH], uint16_t tunnel_distance[W_HEIGHT][W_WIDTH], vertex_t *hither, vertex_t **thither, uint16_t *num_monsters);
 
 void line_of_sight(character_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH]);
 void smart_move(stack_t *move_stack, character_t *character, vertex_t **thither, uint16_t distance[W_HEIGHT][W_WIDTH]);
@@ -79,7 +93,10 @@ void dumb_move(stack_t *move_stack, character_t *character, character_t *player,
 void random_move(stack_t *move_stack, vertex_t **thither);
 
 void tunnel(uint8_t hardness[W_HEIGHT][W_WIDTH], character_t *player, uint16_t floor_distance[W_HEIGHT][W_WIDTH], uint16_t tunnel_distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], vertex_t *thither);
-void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, vertex_t *hither, vertex_t *thither);
+void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, vertex_t *hither, vertex_t *thither, uint16_t *num_monsters);
+
+void monster_list(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player, uint16_t num_init_monsters);
+void monster_list_command(character_t *player);
 
 void place(char display[W_HEIGHT][W_WIDTH], character_t *entities, uint16_t count);
 void place_characters(char display[W_HEIGHT][W_WIDTH], character_t *characters[W_HEIGHT][W_WIDTH]);
@@ -87,11 +104,15 @@ void place_characters(char display[W_HEIGHT][W_WIDTH], character_t *characters[W
 void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
 void draw(char display[W_HEIGHT][W_WIDTH]);
 
+void draw_quit();
 void draw_win();
 void draw_loose();
 
 int main(int argc, char *argv[])
 {
+    /* Initializing Ncurses */
+    init_ncurses();
+
     /* Seeding */
     srand(time(NULL));
 
@@ -107,6 +128,7 @@ int main(int argc, char *argv[])
     character_t *u_stairs;
     uint16_t num_d_stairs;
     character_t *d_stairs;
+    uint16_t num_init_monsters;
     uint16_t num_monsters;
     heap_t characters;
     uint32_t priority;
@@ -120,7 +142,7 @@ int main(int argc, char *argv[])
     char display[W_HEIGHT][W_WIDTH];
 
     /* Switch Processing */
-    get_args(argc, argv, &args, &num_monsters);
+    get_args(argc, argv, &args, &num_init_monsters);
 
     /* Saving and Loading */
     if (args & LOAD)
@@ -138,44 +160,78 @@ int main(int argc, char *argv[])
     heap_init(&characters);
     init_character_map(character_map);
     init_player(&characters, character_map, player);
-    if (!(args & NUMMON))
-        num_monsters = 10;
-    num_monsters = num_monsters < 1481 ? num_monsters : 1481;
-    generate_monsters(&characters, character_map, map, rooms, num_rooms, num_monsters);
+    if (!(args & NUM_MON))
+        num_init_monsters = 10;
+    num_init_monsters = num_init_monsters < 1481 ? num_init_monsters : 1481;
+    generate_monsters(&characters, character_map, map, rooms, num_rooms, num_init_monsters);
+    num_monsters = num_init_monsters;
 
     /* Finding Initial Distances */
     dijkstra(hardness, map, player, floor_distance, 0);
     dijkstra(hardness, map, player, tunnel_distance, 1);
 
     /* Main Loop */
-    while (player->characteristics & ALIVE && heap_size(&characters) > 1) {
+    while (player->characteristics & ALIVE && num_monsters && !(player->characteristics & QUIT)) {
         derive_next_turn_heap(&characters, &next_turn, &priority);
         /* Character Turn */
-        while (heap_size(&next_turn) > 0) {
+        while (heap_size(&next_turn) > 0 && !(player->characteristics & RESET)) {
+            player->characteristics &= ~RESET;
             heap_extract_min(&next_turn, (void**) &character);
             if (character->characteristics & ALIVE) {
-                heap_add(&characters, character, priority + 1000 / character->speed);
-                derive_move_stack(&move_stack, map, hardness, character, &hither, &thither);
                 if (character == player) {
-                    /* If Player */
-                    sketch_map(display, map);
-                    place(display, u_stairs, num_u_stairs);
-                    place(display, d_stairs, num_d_stairs);
-                    place_characters(display, character_map);
-                    draw(display);
-                    usleep(250000);
-                    random_move(&move_stack, &thither);
-                    if (map[thither->ypos][thither->xpos] != ' ') {
-                        move_character(character_map, character, &hither, thither);
-                    }
-                    dijkstra(hardness, map, player, floor_distance, 0);
-                    dijkstra(hardness, map, player, tunnel_distance, 1);
+                    do {
+                        player->characteristics &= ~MON_LIST;
+                        sketch_map(display, map);
+                        place(display, u_stairs, num_u_stairs);
+                        place(display, d_stairs, num_d_stairs);
+                        place_characters(display, character_map);
+                        draw(display);
+                        refresh();
+                        hither.xpos = player->xpos;
+                        hither.ypos = player->ypos;
+                        thither = malloc(sizeof(vertex_t));
+                        player_command(player, thither);
+                        if (map[thither->ypos][thither->xpos] != ' ') {
+                            move_character(character_map, character, &hither, thither, &num_monsters);
+                        }
+                        dijkstra(hardness, map, player, floor_distance, 0);
+                        dijkstra(hardness, map, player, tunnel_distance, 1);
+                        free(thither);
+                        if (player->characteristics & MON_LIST) {
+                            monster_list(character_map, player, num_monsters);
+                        }
+                        if ((player->characteristics & WALK_UP && player->xpos == u_stairs->xpos && player->ypos == u_stairs->ypos) ||
+                            (player->characteristics & WALK_DOWN && player->xpos == d_stairs->xpos && player->ypos == d_stairs->ypos)) {
+                            /* new floor */
+                            free(player);
+                            free(rooms);
+                            free(u_stairs);
+                            free(d_stairs);
+                            heap_delete(&characters);
+                            generate(&player, hardness, &num_rooms, &rooms, &num_u_stairs, &u_stairs, &num_d_stairs, &d_stairs);
+                            player->characteristics |= RESET;
+                            init_map(map, ' ');
+                            map_rooms(map, hardness, num_rooms, rooms);
+                            heap_init(&characters);
+                            init_character_map(character_map);
+                            init_player(&characters, character_map, player);
+                            generate_monsters(&characters, character_map, map, rooms, num_rooms, num_init_monsters);
+                            num_monsters = num_init_monsters;
+                            dijkstra(hardness, map, player, floor_distance, 0);
+                            dijkstra(hardness, map, player, tunnel_distance, 1);
+                        }
+                        else if (!(player->characteristics & MON_LIST && !(player->characteristics & QUIT))){
+                            heap_add(&characters, character, priority + 1000 / character->speed);
+                        }
+                    } while (player->characteristics & MON_LIST && !(player->characteristics & QUIT));
                 }
                 else {
-                    monster_turn(&move_stack, character_map, character, player, map, hardness, floor_distance, tunnel_distance, &hither, &thither);
+                    heap_add(&characters, character, priority + 1000 / character->speed);
+                    derive_move_stack(&move_stack, map, hardness, character, &hither, &thither);
+                    monster_turn(&move_stack, character_map, character, player, map, hardness, floor_distance, tunnel_distance, &hither, &thither, &num_monsters);
+                    stack_delete(&move_stack);
+                    free(thither);
                 }
-                stack_delete(&move_stack);
-                free(thither);
             }
             else {
                 if (character_map[character->ypos][character->xpos] == character)
@@ -186,15 +242,11 @@ int main(int argc, char *argv[])
         heap_delete(&next_turn);
     }
 
-    /* Final Drawing */
-    sketch_map(display, map);
-    place(display, u_stairs, num_u_stairs);
-    place(display, d_stairs, num_d_stairs);
-    place_characters(display, character_map);
-    draw(display);
-
     /* Printing Results */
-    if (player->characteristics & ALIVE)
+    clear();
+    if (player->characteristics & QUIT)
+        draw_quit();
+    else if (player->characteristics & ALIVE)
         draw_win();
     else
         draw_loose();
@@ -204,9 +256,15 @@ int main(int argc, char *argv[])
     free(u_stairs);
     free(d_stairs);
     heap_delete(&characters);
+
+    /* Waiting for a final character */
+    getch();
+
+    /* Deinitializing Ncurses */
+    deinit_ncurses();
 }
 
-void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_monsters)
+void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_init_monsters)
 {
     uint8_t i;
     for (i = 1; i < argc; i++) {
@@ -217,15 +275,14 @@ void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_monsters)
             *args |= LOAD;
         }
         else if (!strcmp(argv[i], "--nummon")) {
-            *args |= NUMMON;
-            sscanf(argv[++i], "%hd", num_monsters);
+            *args |= NUM_MON;
+            sscanf(argv[++i], "%hd", num_init_monsters);
         }
     }
 }
 
 void generate(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, character_t **u_stairs, uint16_t *num_d_stairs, character_t **d_stairs)
 {
-    /* printf("CREATING:\n"); */
     uint16_t i, j;
     uint8_t v;
     *num_rooms = 6 + rand() % 2;
@@ -247,11 +304,6 @@ void generate(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_
             }
         }
     } while(!v);
-    /*
-    for (i = 0; i < *num_rooms; i++) {
-        printf("%d : %d : %d : %d\n", (*rooms)[i].xpos, (*rooms)[i].ypos, (*rooms)[i].xsize, (*rooms)[i].ysize);
-    }
-    */
     *player = malloc(sizeof(character_t));
     i = rand() % *num_rooms;
     (*player)->xpos = (*rooms)[i].xpos + rand() % (*rooms)[i].xsize;
@@ -298,7 +350,6 @@ void generate(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_
 
 void save(character_t *player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms, uint16_t num_u_stairs, character_t *u_stairs, uint16_t num_d_stairs, character_t *d_stairs)
 {
-    /* printf("SAVING:\n"); */
     uint16_t i;
     uint8_t j;
     uint8_t w_byte;
@@ -450,6 +501,19 @@ void map_rooms(char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH],
     }
 }
 
+void init_ncurses()
+{
+    initscr();
+    raw();
+    noecho();
+    curs_set(0);
+    keypad(stdscr, TRUE);
+}
+
+void deinit_ncurses() {
+    endwin();
+}
+
 void init_map(char map[W_HEIGHT][W_WIDTH], char c)
 {
     uint8_t i, j;
@@ -490,11 +554,11 @@ void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDT
     character_map[player->ypos][player->xpos] = player;
 }
 
-void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], room_t *rooms, uint16_t num_rooms, uint16_t num_monsters)
+void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], room_t *rooms, uint16_t num_rooms, uint16_t num_init_monsters)
 {
     uint16_t i, j;
     character_t *monster;
-    for (i = 1; i <= num_monsters; i++) {
+    for (i = 1; i <= num_init_monsters; i++) {
         monster = malloc(sizeof(character_t));
         do {
             monster->characteristics = 0x00;
@@ -520,9 +584,6 @@ void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][
                 monster->ypos = rooms[j].ypos + rand() % rooms[j].ysize;
             }
         } while (character_map[monster->ypos][monster->xpos] != NULL || (!(monster->characteristics & TUNNEL) && (map[monster->ypos][monster->xpos] == ' ')));
-        /*
-         printf("Generated %c, speed %d, at (%hd,%hd)\n", monster->symbol, monster->speed, monster->xpos, monster->ypos);
-         */
         heap_add(characters, monster, 0);
         character_map[monster->ypos][monster->xpos] = monster;
     }
@@ -671,7 +732,76 @@ void derive_move_stack(stack_t *move_stack, char map[W_HEIGHT][W_WIDTH], uint8_t
     stack_push(move_stack, *thither);
 }
 
-void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t floor_distance[W_HEIGHT][W_WIDTH], uint16_t tunnel_distance[W_HEIGHT][W_WIDTH], vertex_t *hither, vertex_t **thither)
+void player_command(character_t *player, vertex_t *thither)
+{
+    int cmd;
+    thither->xpos = player->xpos;
+    thither->ypos = player->ypos;
+    player->characteristics &= ~(WALK_UP & WALK_DOWN);
+    do {
+        cmd = getch();
+        player->characteristics &= ~RESET;
+        switch (cmd) {
+            case '7':
+            case 'y':
+                thither->xpos -= 1;
+                thither->ypos -= 1;
+                break;
+            case '8':
+            case 'k':
+                thither->ypos -= 1;
+                break;
+            case '9':
+            case 'u':
+                thither->xpos += 1;
+                thither->ypos -= 1;
+                break;
+            case '6':
+            case 'l':
+                thither->xpos += 1;
+                break;
+            case '3':
+            case 'n':
+                thither->xpos += 1;
+                thither->ypos += 1;
+                break;
+            case '2':
+            case 'j':
+                thither->ypos += 1;
+                break;
+            case '1':
+            case 'b':
+                thither->xpos -= 1;
+                thither->ypos += 1;
+                break;
+            case '4':
+            case 'h':
+                thither->xpos -= 1;
+                break;
+            case '>':
+                player->characteristics |= WALK_DOWN;
+                break;
+            case '<':
+                player->characteristics |= WALK_UP;
+                break;
+            case '5':
+            case ' ':
+                break;
+            case 'm':
+                player->characteristics |= MON_LIST;
+                break;
+            case 'Q':
+                player->characteristics |= QUIT;
+                break;
+            default:
+                player->characteristics |= RESET;
+                break;
+        }
+    } while (player->characteristics & RESET);
+    player->characteristics &= ~RESET;
+}
+
+void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t floor_distance[W_HEIGHT][W_WIDTH], uint16_t tunnel_distance[W_HEIGHT][W_WIDTH], vertex_t *hither, vertex_t **thither, uint16_t *num_monsters)
 {
     uint16_t custom_distance[W_HEIGHT][W_WIDTH];
     character_t ghost_player;
@@ -706,7 +836,7 @@ void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WI
         tunnel(hardness, player, floor_distance, tunnel_distance, map, *thither);
     }
     if (map[(*thither)->ypos][(*thither)->xpos] != ' ') {
-        move_character(character_map, character, hither, *thither);
+        move_character(character_map, character, hither, *thither, num_monsters);
     }
 }
 
@@ -719,16 +849,12 @@ void line_of_sight(character_t *character, character_t *player, char map[W_HEIGH
         slope = (player->ypos - character->ypos) / (player->xpos - (double) character->xpos);
         if (!(slope > 1.0 || slope < -1.0)) {
             for (i = 0; i <= (int) (player->xpos) - (int) (character->xpos); i++) {
-                // printf("(%d,%d)\n", character->xpos + i, character->ypos + (int) (slope * i));
                 if (map[character->ypos + (int) (slope * i)][character->xpos + i] == ' ') {
-                    // printf("Failure on sight 1\n");
                     character->characteristics &= ~SEE;
                 }
             }
             for (i = 0; i <= (int) (character->xpos) - (int) (player->xpos); i++) {
-                // printf("(%d,%d)\n", player->xpos + i, player->ypos + (int) (slope * i));
                 if (map[player->ypos + (int) (slope * i)][player->xpos + i] == ' ') {
-                    // printf("Failure on sight 2\n");
                     character->characteristics &= ~SEE;
                 }
             }
@@ -738,23 +864,18 @@ void line_of_sight(character_t *character, character_t *player, char map[W_HEIGH
         slope = (player->xpos - character->xpos) / (player->ypos - (double) character->ypos);
         if (!(slope > 1.0 || slope < -1.0)) {
             for (i = 0; i <= (int) (player->ypos) - (int) (character->ypos); i++) {
-                // printf("(%d,%d)\n", character->ypos + i, character->xpos + (int) (slope * i));
                 if (map[character->ypos + i][character->xpos + (int) (slope * i)] == ' ') {
-                    // printf("Failure on sight 3\n");
                     character->characteristics &= ~SEE;
                 }
             }
             for (i = 0; i <= (int) (character->ypos) - (int) (player->ypos); i++) {
-                // printf("(%d,%d)\n", player->xpos + (int) (slope * i), player->ypos + i);
                 if (map[player->ypos + i][player->xpos + (int) (slope * i)] == ' ') {
-                    // printf("Failure on sight 4\n");
                     character->characteristics &= ~SEE;
                 }
             }
         }
     }
     if (character->characteristics & SMART && character->characteristics & SEE) {
-        // printf("%c Recording Knowledge\n", character->symbol);
         character->characteristics |= KNOWN;
         character->known_location.xpos = player->xpos;
         character->known_location.ypos = player->ypos;
@@ -821,16 +942,87 @@ void tunnel(uint8_t hardness[W_HEIGHT][W_WIDTH], character_t *player, uint16_t f
     }
 }
 
-void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, vertex_t *hither, vertex_t *thither)
+void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, vertex_t *hither, vertex_t *thither, uint16_t *num_monsters)
 {
     /* [COMBAT] */
     if (character_map[thither->ypos][thither->xpos] != NULL && character_map[thither->ypos][thither->xpos] != character) {
         character_map[thither->ypos][thither->xpos]->characteristics &= ~ALIVE;
+        if (character_map[thither->ypos][thither->xpos]->symbol != '@')
+            *num_monsters -= 1;
     }
     character_map[hither->ypos][hither->xpos] = NULL;
     character_map[thither->ypos][thither->xpos] = character;
     character->xpos = thither->xpos;
     character->ypos = thither->ypos;
+}
+
+void monster_list(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player, uint16_t num_init_monsters)
+{
+    uint16_t i, j, k;
+    int8_t vertical_amount, horizontal_amount;
+    char vertical[6], horizontal[5];
+    character_t **monster_list = malloc(sizeof(character_t) * num_init_monsters);
+    for (i = 0; i < W_HEIGHT; i++) {
+        for (j = 0; j < W_WIDTH; j++) {
+            if (character_map[i][j] != NULL && character_map[i][j] != player) {
+                monster_list[k++] = character_map[i][j];
+            }
+        }
+    }
+    k = 0;
+    do {
+        for (i = 3; i < W_WIDTH - 1; i++) {
+            mvprintw(i, 22, "                                  ");
+        }
+        for (i = 0; i < (num_init_monsters - k < 15 ? num_init_monsters - k : 15); i++) {
+            monster_list[i + k]->ypos <= player->ypos ? sprintf(vertical, "north") : sprintf(vertical, "south");
+            vertical_amount = monster_list[i + k]->ypos - player->ypos;
+            vertical_amount = vertical_amount > 0 ? vertical_amount : -vertical_amount;
+            monster_list[i + k]->xpos < player->xpos ? sprintf(horizontal, "west") : sprintf(horizontal, "east");
+            horizontal_amount = monster_list[i + k]->xpos - player->xpos;
+            horizontal_amount = horizontal_amount > 0 ? horizontal_amount : -horizontal_amount;
+            mvprintw(i + 4, 26, "%c at %d %s and %d %s", monster_list[i + k]->symbol, vertical_amount, vertical, horizontal_amount, horizontal);
+        }
+        refresh();
+        monster_list_command(player);
+        if (player->characteristics & WALK_UP) {
+            k -= 0 < k ? 1 : 0;
+        }
+        if (player->characteristics & WALK_DOWN) {
+            k += k + 15 < num_init_monsters ? 1 : 0;
+        }
+        player->characteristics &= ~(WALK_UP | WALK_DOWN);
+    } while (!(player->characteristics & ESCAPE) && !(player->characteristics & QUIT));
+    free(monster_list);
+}
+
+void monster_list_command(character_t *player)
+{
+    int cmd;
+    player->characteristics &= ~(WALK_UP & WALK_DOWN);
+    player->characteristics &= ~ESCAPE;
+    do {
+        cmd = getch();
+        player->characteristics &= ~RESET;
+        switch (cmd) {
+            case KEY_UP:
+                player->characteristics |= WALK_UP;
+                break;
+            case KEY_DOWN:
+                player->characteristics |= WALK_DOWN;
+                break;
+            /* ESCAPE */
+            case 27:
+                player->characteristics |= ESCAPE;
+                break;
+            case 'Q':
+                player->characteristics |= QUIT;
+                break;
+            default:
+                player->characteristics |= RESET;
+                break;
+        }
+    } while (player->characteristics & RESET);
 }
 
 void place_characters(char display[W_HEIGHT][W_WIDTH], character_t *characters[W_HEIGHT][W_WIDTH])
@@ -858,15 +1050,14 @@ void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WI
     for (i = 0; i < W_HEIGHT; i++) {
         for (j = 0; j < W_WIDTH; j++) {
             if (distance[i][j] == 0xFFFF && map[i][j] == ' ')
-                printf(" ");
+                mvprintw(i + 1, j, " ");
             else if (distance[i][j] == 0xFFFF && map[i][j] != ' ')
-                printf("X");
+                mvprintw(i + 1, j, "X");
             else if (distance[i][j] == 0)
-                printf("@");
+                mvprintw(i + 1, j, "@");
             else
-                printf("%c", (distance[i][j] % 10) + '0');
+                mvprintw(i + 1, j, "%c", (distance[i][j] % 10) + '0');
         }
-        printf("\n");
     }
 }
 
@@ -875,18 +1066,19 @@ void draw(char display[W_HEIGHT][W_WIDTH])
     uint8_t i, j;
     for (i = 0; i < W_HEIGHT; i++) {
         for (j = 0; j < W_WIDTH; j++) {
-            printf("%c", display[i][j]);
+            mvprintw(i + 1, j, "%c", display[i][j]);
         }
-        printf("\n");
     }
 }
 
+void draw_quit() {
+    mvprintw(11, 30, "Thou hast quit");
+}
+
 void draw_win() {
-    printf("\n");
-    printf("Thou hast won!\n");
+    mvprintw(11, 30, "Thou hast won");
 }
 
 void draw_loose() {
-    printf("\n");
-    printf("Thou hast lost.\n");
+    mvprintw(11, 30, "Thou hast lost");
 }
