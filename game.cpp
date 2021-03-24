@@ -36,6 +36,8 @@
 /* ALIVE is reserved */
 #define MON_LIST 0x20
 #define ESCAPE 0x40
+#define FOG 0x80
+#define TELEPORT 0x100
 
 typedef class room {
     public:
@@ -57,7 +59,7 @@ typedef class character {
         uint8_t ypos;
         char symbol;
         uint16_t sequence;
-        uint8_t characteristics;
+        uint16_t characteristics;
         uint8_t speed;
         vertex_t known_location;
 } character_t;
@@ -87,7 +89,7 @@ void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t
 void derive_next_turn_heap(heap_t *characters, heap_t *next_turn, uint32_t *priority);
 void derive_move_stack(stack_t *move_stack, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], character_t *character, vertex_t *hither, vertex_t **thither);
 
-void player_command(character_t *player, vertex_t *thither);
+void player_command(character_t *player, vertex_t *thither, const char visible_map[W_HEIGHT][W_WIDTH], const char display[W_HEIGHT][W_WIDTH]);
 void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t floor_distance[W_HEIGHT][W_WIDTH], uint16_t tunnel_distance[W_HEIGHT][W_WIDTH], vertex_t *hither, vertex_t **thither, uint16_t *num_monsters);
 
 void line_of_sight(character_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH]);
@@ -98,14 +100,18 @@ void random_move(stack_t *move_stack, vertex_t **thither);
 void tunnel(uint8_t hardness[W_HEIGHT][W_WIDTH], character_t *player, uint16_t floor_distance[W_HEIGHT][W_WIDTH], uint16_t tunnel_distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], vertex_t *thither);
 void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, vertex_t *hither, vertex_t *thither, uint16_t *num_monsters);
 
+void teleport_command(character_t *player, vertex_t *thither, char display[W_HEIGHT][W_WIDTH]);
+
 void monster_list(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player, uint16_t num_init_monsters);
 void monster_list_command(character_t *player);
 
 void place(char display[W_HEIGHT][W_WIDTH], character_t *entities, uint16_t count);
 void place_characters(char display[W_HEIGHT][W_WIDTH], character_t *characters[W_HEIGHT][W_WIDTH]);
 
+void sketch_visible_map(char visible_map[W_HEIGHT][W_WIDTH], const char map[W_HEIGHT][W_WIDTH], const char display[W_HEIGHT][W_WIDTH], const character_t *player);
+
 void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
-void draw(char display[W_HEIGHT][W_WIDTH]);
+void draw(const char display[W_HEIGHT][W_WIDTH]);
 
 void draw_quit();
 void draw_win();
@@ -143,6 +149,7 @@ int main(int argc, char *argv[])
     character_t *character_map[W_HEIGHT][W_WIDTH];
     char map[W_HEIGHT][W_WIDTH];
     char display[W_HEIGHT][W_WIDTH];
+    char visible_map[W_HEIGHT][W_WIDTH];
 
     /* Switch Processing */
     get_args(argc, argv, &args, &num_init_monsters);
@@ -157,7 +164,10 @@ int main(int argc, char *argv[])
 
     /* Sketching Map */
     init_map(map, ' ');
+    init_map(visible_map, ' ');
     map_rooms(map, hardness, num_rooms, rooms);
+    place(map, u_stairs, num_u_stairs);
+    place(map, d_stairs, num_d_stairs);
 
     /* Generating Characters */
     heap_init(&characters);
@@ -184,16 +194,19 @@ int main(int argc, char *argv[])
                 if (character == player) {
                     do {
                         player->characteristics &= ~MON_LIST;
+                        player->characteristics &= ~TELEPORT;
                         sketch_map(display, map);
-                        place(display, u_stairs, num_u_stairs);
-                        place(display, d_stairs, num_d_stairs);
                         place_characters(display, character_map);
-                        draw(display);
+                        sketch_visible_map(visible_map, map, display, player);
+                        if (player->characteristics & FOG)
+                            draw(visible_map);
+                        else
+                            draw(display);
                         refresh();
                         hither.xpos = player->xpos;
                         hither.ypos = player->ypos;
                         thither = (vertex_t *) malloc(sizeof(vertex_t));
-                        player_command(player, thither);
+                        player_command(player, thither, visible_map, display);
                         if (map[thither->ypos][thither->xpos] != ' ') {
                             move_character(character_map, character, &hither, thither, &num_monsters);
                         }
@@ -214,7 +227,10 @@ int main(int argc, char *argv[])
                             generate(&player, hardness, &num_rooms, &rooms, &num_u_stairs, &u_stairs, &num_d_stairs, &d_stairs);
                             player->characteristics |= RESET;
                             init_map(map, ' ');
+                            init_map(visible_map, ' ');
                             map_rooms(map, hardness, num_rooms, rooms);
+                            place(map, u_stairs, num_u_stairs);
+                            place(map, d_stairs, num_d_stairs);
                             heap_init(&characters);
                             init_character_map(character_map);
                             init_player(&characters, character_map, player);
@@ -223,10 +239,20 @@ int main(int argc, char *argv[])
                             dijkstra(hardness, map, player, floor_distance, 0);
                             dijkstra(hardness, map, player, tunnel_distance, 1);
                         }
-                        else if (!(player->characteristics & MON_LIST && !(player->characteristics & QUIT))){
+                        else if (!(player->characteristics & (MON_LIST | TELEPORT) && !(player->characteristics & QUIT))){
                             heap_add(&characters, character, priority + 1000 / character->speed);
                         }
-                    } while (player->characteristics & MON_LIST && !(player->characteristics & QUIT));
+                        if (player->characteristics & TELEPORT) {
+                            thither = (vertex_t *) malloc(sizeof(vertex_t));
+                            thither->ypos = player->ypos;
+                            thither->xpos = player->xpos;
+                            teleport_command(player, thither, display);
+                            if (!(player->characteristics & ESCAPE)) {
+                                move_character(character_map, character, &hither, thither, &num_monsters);
+                            }
+                            free(thither);
+                        }
+                    } while (player->characteristics & (MON_LIST | TELEPORT) && !(player->characteristics & QUIT) && num_monsters);
                 }
                 else {
                     heap_add(&characters, character, priority + 1000 / character->speed);
@@ -550,8 +576,9 @@ void init_character_map(character_t *character_map[W_HEIGHT][W_WIDTH])
 void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player)
 {
     player->sequence = 0;
-    player->characteristics = 0x00;
+    player->characteristics = 0x0000;
     player->characteristics |= ALIVE;
+    player->characteristics |= FOG;
     player->speed = 10;
     heap_add(characters, player, 0);
     character_map[player->ypos][player->xpos] = player;
@@ -735,7 +762,7 @@ void derive_move_stack(stack_t *move_stack, char map[W_HEIGHT][W_WIDTH], uint8_t
     stack_push(move_stack, *thither);
 }
 
-void player_command(character_t *player, vertex_t *thither)
+void player_command(character_t *player, vertex_t *thither, const char visible_map[W_HEIGHT][W_WIDTH], const char display[W_HEIGHT][W_WIDTH])
 {
     int cmd;
     thither->xpos = player->xpos;
@@ -792,6 +819,21 @@ void player_command(character_t *player, vertex_t *thither)
                 break;
             case 'm':
                 player->characteristics |= MON_LIST;
+                break;
+            case 'f':
+                if (player->characteristics & FOG) {
+                    player->characteristics &= ~FOG;
+                    draw(display);
+                }
+                else {
+                    player->characteristics |= FOG;
+                    draw(visible_map);
+                }
+                refresh();
+                player->characteristics |= RESET;
+                break;
+            case 'g':
+                player->characteristics |= TELEPORT;
                 break;
             case 'Q':
                 player->characteristics |= QUIT;
@@ -959,6 +1001,88 @@ void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *
     character->ypos = thither->ypos;
 }
 
+void teleport_command(character_t *player, vertex_t *thither, char display[W_HEIGHT][W_WIDTH])
+{
+    int cmd;
+    player->characteristics &= ~ESCAPE;
+    do {
+        draw(display);
+        mvprintw(thither->ypos + 1, thither->xpos, "*");
+        refresh();
+        cmd = getch();
+        player->characteristics &= ~RESET;
+        switch(cmd) {
+            case '7':
+            case 'y':
+                if (thither->xpos > 1)
+                    thither->xpos -= 1;
+                if (thither->xpos > 1)
+                    thither->ypos -= 1;
+                player->characteristics |= RESET;
+                break;
+            case '8':
+            case 'k':
+                if (thither->ypos > 1)
+                    thither->ypos -= 1;
+                player->characteristics |= RESET;
+                break;
+            case '9':
+            case 'u':
+                if (thither->xpos < W_WIDTH - 2)
+                    thither->xpos += 1;
+                if (thither->ypos > 1)
+                    thither->ypos -= 1;
+                player->characteristics |= RESET;
+                break;
+            case '6':
+            case 'l':
+                if (thither->xpos < W_WIDTH - 2)
+                    thither->xpos += 1;
+                player->characteristics |= RESET;
+                break;
+            case '3':
+            case 'n':
+                if (thither->xpos < W_WIDTH - 2)
+                    thither->xpos += 1;
+                if (thither->ypos < W_HEIGHT - 2)
+                    thither->ypos += 1;
+                player->characteristics |= RESET;
+                break;
+            case '2':
+            case 'j':
+                if (thither->ypos > 1)
+                    thither->ypos += 1;
+                player->characteristics |= RESET;
+                break;
+            case '1':
+            case 'b':
+                if (thither->xpos > 1)
+                    thither->xpos -= 1;
+                if (thither->ypos < W_HEIGHT - 2)
+                    thither->ypos += 1;
+                player->characteristics |= RESET;
+                break;
+            case '4':
+            case 'h':
+                if (thither->xpos > 1)
+                    thither->xpos -= 1;
+                player->characteristics |= RESET;
+                break;
+            case 'g':
+                break;
+            /* ESCAPE */
+            case 27:
+                player->characteristics |= ESCAPE;
+                break;
+            case 'Q':
+                player->characteristics |= QUIT;
+                break;
+            default:
+                player->characteristics |= RESET;
+        }
+    } while (player->characteristics & RESET);
+}
+
 void monster_list(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player, uint16_t num_init_monsters)
 {
     uint16_t i, j, k;
@@ -1039,6 +1163,26 @@ void place_characters(char display[W_HEIGHT][W_WIDTH], character_t *characters[W
     }
 }
 
+void sketch_visible_map(char visible_map[W_HEIGHT][W_WIDTH], const char map[W_HEIGHT][W_WIDTH], const char display[W_HEIGHT][W_WIDTH], const character_t *player)
+{
+    uint8_t i, j;
+    vector_t v;
+    for (i = 0; i < W_HEIGHT; i++) {
+        for (j = 0; j < W_WIDTH; j++) {
+            v.ypos = i - player->ypos;
+            v.xpos = j - player->xpos;
+            v.ypos *= v.ypos < 0 ? -1 : 1;
+            v.xpos *= v.xpos < 0 ? -1 : 1;
+            if (v.xpos <= 2 && v.ypos <= 2) {
+                visible_map[i][j] = display[i][j];
+            }
+            else if (visible_map[i][j] != ' ') {
+                visible_map[i][j] = map[i][j];
+            }
+        }
+    }
+}
+
 void place(char display[W_HEIGHT][W_WIDTH], character_t *entities, uint16_t count)
 {
     uint16_t i;
@@ -1064,7 +1208,7 @@ void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WI
     }
 }
 
-void draw(char display[W_HEIGHT][W_WIDTH])
+void draw(const char display[W_HEIGHT][W_WIDTH])
 {
     uint8_t i, j;
     for (i = 0; i < W_HEIGHT; i++) {
