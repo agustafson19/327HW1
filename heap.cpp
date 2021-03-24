@@ -7,7 +7,7 @@
 int heap_init(heap_t *h)
 {
     h->length = 20;
-    h->nodes = malloc(sizeof(heap_node_t) * h->length);
+    h->nodes = (heap_node_t *) malloc(sizeof(heap_node_t) * h->length);
     h->size = 0;
     return 0;
 }
@@ -30,7 +30,7 @@ int heap_add(heap_t *h, void *value, uint32_t priority)
     h->size++;
     if (h->size >= h->length) {
         h->length *= 2;
-        h->nodes = realloc(h->nodes, sizeof(heap_node_t) * h->length);
+        h->nodes = (heap_node_t *) realloc(h->nodes, sizeof(heap_node_t) * h->length);
     }
     h->nodes[i].value = value;
     h->nodes[i].priority = priority;

@@ -1,8 +1,8 @@
 
 all: game
 
-game: game.c
-	gcc -Wall -Werror -ggdb3 -o game vertex.c stack.c heap.c game.c -lncurses
+game: game.cpp
+	g++ -Wall -Werror -ggdb3 -o game vertex.cpp stack.cpp heap.cpp game.cpp -lncurses
 
 clean:
 	rm -f game

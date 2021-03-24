@@ -23,7 +23,7 @@ int stack_delete(stack_t *s)
 int stack_push(stack_t *s, void *value)
 {
     stack_node_t *n;
-    if (!(n = malloc(sizeof(*n)))) {
+    if (!(n = (stack_node_t *) malloc(sizeof(*n)))) {
         return 1;
     }
     n->value = value;

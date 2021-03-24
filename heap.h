@@ -1,17 +1,19 @@
 #ifndef HEAP_H
 #define HEAP_H
 
-typedef struct heap_node heap_node_t;
+typedef class heap_node heap_node_t;
 
-struct heap_node {
-    void *value;
-    uint32_t priority;
+class heap_node {
+    public:
+        void *value;
+        uint32_t priority;
 };
 
-typedef struct heap {
-    heap_node_t *nodes;
-    uint32_t length;
-    uint32_t size;
+typedef class heap {
+    public:
+        heap_node_t *nodes;
+        uint32_t length;
+        uint32_t size;
 } heap_t;
 
 int heap_init(heap_t *h);

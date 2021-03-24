@@ -37,26 +37,29 @@
 #define MON_LIST 0x20
 #define ESCAPE 0x40
 
-typedef struct room {
-    uint8_t xpos;
-    uint8_t ypos;
-    uint8_t xsize;
-    uint8_t ysize;
+typedef class room {
+    public:
+        uint8_t xpos;
+        uint8_t ypos;
+        uint8_t xsize;
+        uint8_t ysize;
 } room_t;
 
-typedef struct vector {
-    int xpos;
-    int ypos;
+typedef class vector {
+    public:
+        int xpos;
+        int ypos;
 } vector_t;
 
-typedef struct character {
-    uint8_t xpos;
-    uint8_t ypos;
-    char symbol;
-    uint16_t sequence;
-    uint8_t characteristics;
-    uint8_t speed;
-    vertex_t known_location;
+typedef class character {
+    public:
+        uint8_t xpos;
+        uint8_t ypos;
+        char symbol;
+        uint16_t sequence;
+        uint8_t characteristics;
+        uint8_t speed;
+        vertex_t known_location;
 } character_t;
 
 void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_init_monsters);
@@ -189,7 +192,7 @@ int main(int argc, char *argv[])
                         refresh();
                         hither.xpos = player->xpos;
                         hither.ypos = player->ypos;
-                        thither = malloc(sizeof(vertex_t));
+                        thither = (vertex_t *) malloc(sizeof(vertex_t));
                         player_command(player, thither);
                         if (map[thither->ypos][thither->xpos] != ' ') {
                             move_character(character_map, character, &hither, thither, &num_monsters);
@@ -286,7 +289,7 @@ void generate(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_
     uint16_t i, j;
     uint8_t v;
     *num_rooms = 6 + rand() % 2;
-    *rooms = malloc(sizeof(room_t) * *num_rooms);
+    *rooms = (room_t *) malloc(sizeof(room_t) * *num_rooms);
     do {
         for (i = 0; i < *num_rooms; i++) {
             (*rooms)[i].xsize = 4 + rand() % 10;
@@ -304,18 +307,18 @@ void generate(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_
             }
         }
     } while(!v);
-    *player = malloc(sizeof(character_t));
+    *player = (character_t *) malloc(sizeof(character_t));
     i = rand() % *num_rooms;
     (*player)->xpos = (*rooms)[i].xpos + rand() % (*rooms)[i].xsize;
     (*player)->ypos = (*rooms)[i].ypos + rand() % (*rooms)[i].ysize;
     (*player)->symbol = '@';
     *num_u_stairs = 1;
-    *u_stairs = malloc(sizeof(character_t));
+    *u_stairs = (character_t *) malloc(sizeof(character_t));
     (*u_stairs)->xpos = (*rooms)[2].xpos + 1;
     (*u_stairs)->ypos = (*rooms)[2].ypos + 1;
     (*u_stairs)->symbol = '<';
     *num_d_stairs = 1;
-    *d_stairs = malloc(sizeof(character_t));
+    *d_stairs = (character_t *) malloc(sizeof(character_t));
     (*d_stairs)->xpos = (*rooms)[*num_rooms - 1].xpos + 1;
     (*d_stairs)->ypos = (*rooms)[*num_rooms - 1].ypos + 1;
     (*d_stairs)->symbol = '>';
@@ -357,9 +360,9 @@ void save(character_t *player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num
     uint32_t w;
     char version[13] = "RLG327-@2021";
     char *home = getenv("HOME");
-    char *gamedir = ".rlg327";
-    char *save = "dungeon";
-    char *path = malloc(strlen(home) + strlen(gamedir) + strlen(save) + 3);
+    const char *gamedir = ".rlg327";
+    const char *save = "dungeon";
+    char *path = (char *) malloc(strlen(home) + strlen(gamedir) + strlen(save) + 3);
     sprintf(path, "%s/%s/%s", home, gamedir, save);
     FILE *f = fopen(path, "w");
     for (i = 0; i < 12; i++) {
@@ -422,15 +425,15 @@ void load(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *n
     char version[13];
     version[12] = '\0';
     char *home = getenv("HOME");
-    char *gamedir = ".rlg327";
-    char *save = "dungeon";
-    char *path = malloc(strlen(home) + strlen(gamedir) + strlen(save) + 3);
+    const char *gamedir = ".rlg327";
+    const char *save = "dungeon";
+    char *path = (char *) malloc(strlen(home) + strlen(gamedir) + strlen(save) + 3);
     sprintf(path, "%s/%s/%s", home, gamedir, save);
     FILE *f = fopen(path, "r");
     fread(version, sizeof(char), 12, f);
     fread(&r, sizeof(uint32_t), 1, f);
     fread(&r, sizeof(uint32_t), 1, f);
-    *player = malloc(sizeof(character_t));
+    *player = (character_t *) malloc(sizeof(character_t));
     fread(&r_byte, sizeof(uint8_t), 1, f);
     (*player)->xpos = r_byte;
     fread(&r_byte, sizeof(uint8_t), 1, f);
@@ -445,7 +448,7 @@ void load(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *n
     }
     fread(&r_short, sizeof(uint16_t), 1, f);
     *num_rooms = be16toh(r_short);
-    *rooms = malloc(sizeof(room_t) * *num_rooms);
+    *rooms = (room_t *) malloc(sizeof(room_t) * *num_rooms);
     for (i = 0; i < *num_rooms; i++) {
         fread(&r_byte, sizeof(uint8_t), 1, f);
         (*rooms)[i].xpos = r_byte;
@@ -458,7 +461,7 @@ void load(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *n
     }
     fread(&r_short, sizeof(uint16_t), 1, f);
     *num_u_stairs = be16toh(r_short);
-    *u_stairs = malloc(sizeof(character_t) * *num_u_stairs);
+    *u_stairs = (character_t *) malloc(sizeof(character_t) * *num_u_stairs);
     for (i = 0; i < *num_u_stairs; i++) {
         fread(&r_byte, sizeof(uint8_t), 1, f);
         (*u_stairs)[i].xpos = r_byte;
@@ -468,7 +471,7 @@ void load(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *n
     }
     fread(&r_short, sizeof(uint16_t), 1, f);
     *num_d_stairs = be16toh(r_short);
-    *d_stairs = malloc(sizeof(character_t) * *num_d_stairs);
+    *d_stairs = (character_t *) malloc(sizeof(character_t) * *num_d_stairs);
     for (i = 0; i < *num_d_stairs; i++) {
         fread(&r_byte, sizeof(uint8_t), 1, f);
         (*d_stairs)[i].xpos = r_byte;
@@ -559,7 +562,7 @@ void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][
     uint16_t i, j;
     character_t *monster;
     for (i = 1; i <= num_init_monsters; i++) {
-        monster = malloc(sizeof(character_t));
+        monster = (character_t *) malloc(sizeof(character_t));
         do {
             monster->characteristics = 0x00;
             monster->characteristics |= rand() % 2 ? SMART : 0x00;
@@ -605,7 +608,7 @@ void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], 
                 distance[i][j] = 0xFFFF;
             }
             if ((tunnel || map[i][j] != ' ') && hardness[i][j] != 0xFF) {
-                v = malloc(sizeof(vertex_t));
+                v = (vertex_t *) malloc(sizeof(vertex_t));
                 v->ypos = i;
                 v->xpos = j;
                 heap_add(&h, v, distance[v->ypos][v->xpos]);
@@ -644,21 +647,21 @@ void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t
     if (v->ypos > 1) {
         if (v->xpos > 1) {
             if (hardness[v->ypos - 1][v->xpos - 1] != 0xFF && (tunnel || map[v->ypos - 1][v->xpos - 1] != ' ')) {
-                u = malloc(sizeof(vertex_t));
+                u = (vertex_t *) malloc(sizeof(vertex_t));
                 u->ypos = v->ypos - 1;
                 u->xpos = v->xpos - 1;
                 stack_push(s, u);
             }
         }
         if (hardness[v->ypos - 1][v->xpos] != 0xFF && (tunnel || map[v->ypos - 1][v->xpos] != ' ')) {
-            u = malloc(sizeof(vertex_t));
+            u = (vertex_t *) malloc(sizeof(vertex_t));
             u->ypos = v->ypos - 1;
             u->xpos = v->xpos;
             stack_push(s, u);
         }
         if (v->xpos < W_WIDTH - 2) {
             if (hardness[v->ypos - 1][v->xpos + 1] != 0xFF && (tunnel || map[v->ypos - 1][v->xpos + 1] != ' ')) {
-                u = malloc(sizeof(vertex_t));
+                u = (vertex_t *) malloc(sizeof(vertex_t));
                 u->ypos = v->ypos - 1;
                 u->xpos = v->xpos + 1;
                 stack_push(s, u);
@@ -667,7 +670,7 @@ void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t
     }
     if (v->xpos > 1) {
         if (hardness[v->ypos][v->xpos - 1] != 0xFF && (tunnel || map[v->ypos][v->xpos - 1] != ' ')) {
-            u = malloc(sizeof(vertex_t));
+            u = (vertex_t *) malloc(sizeof(vertex_t));
             u->ypos = v->ypos;
             u->xpos = v->xpos - 1;
             stack_push(s, u);
@@ -675,7 +678,7 @@ void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t
     }
     if (v->xpos < W_WIDTH - 2) {
         if (hardness[v->ypos][v->xpos + 1] != 0xFF && (tunnel || map[v->ypos][v->xpos + 1] != ' ')) {
-            u = malloc(sizeof(vertex_t));
+            u = (vertex_t *) malloc(sizeof(vertex_t));
             u->ypos = v->ypos;
             u->xpos = v->xpos + 1;
             stack_push(s, u);
@@ -684,21 +687,21 @@ void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t
     if (v->ypos < W_HEIGHT) {
         if (v->xpos > 1) {
             if (hardness[v->ypos + 1][v->xpos - 1] != 0xFF && (tunnel || map[v->ypos + 1][v->xpos - 1] != ' ')) {
-                u = malloc(sizeof(vertex_t));
+                u = (vertex_t *) malloc(sizeof(vertex_t));
                 u->ypos = v->ypos + 1;
                 u->xpos = v->xpos - 1;
                 stack_push(s, u);
             }
         }
         if (hardness[v->ypos + 1][v->xpos] != 0xFF && (tunnel || map[v->ypos + 1][v->xpos] != ' ')) {
-            u = malloc(sizeof(vertex_t));
+            u = (vertex_t *) malloc(sizeof(vertex_t));
             u->ypos = v->ypos + 1;
             u->xpos = v->xpos;
             stack_push(s, u);
         }
         if (v->xpos < W_WIDTH - 2) {
             if (hardness[v->ypos + 1][v->xpos + 1] != 0xFF && (tunnel || map[v->ypos + 1][v->xpos + 1] != ' ')) {
-                u = malloc(sizeof(vertex_t));
+                u = (vertex_t *) malloc(sizeof(vertex_t));
                 u->ypos = v->ypos + 1;
                 u->xpos = v->xpos + 1;
                 stack_push(s, u);
@@ -726,7 +729,7 @@ void derive_move_stack(stack_t *move_stack, char map[W_HEIGHT][W_WIDTH], uint8_t
     hither->xpos = character->xpos;
     hither->ypos = character->ypos;
     get_neighbors(move_stack, hither, map, hardness, character->characteristics & TUNNEL);
-    *thither = malloc(sizeof(vertex_t));
+    *thither = (vertex_t *) malloc(sizeof(vertex_t));
     (*thither)->xpos = hither->xpos;
     (*thither)->ypos = hither->ypos;
     stack_push(move_stack, *thither);
@@ -913,7 +916,7 @@ void dumb_move(stack_t *move_stack, character_t *character, character_t *player,
         free(*thither);
     }
     if (i) {
-        *thither = malloc(sizeof(vertex_t));
+        *thither = (vertex_t *) malloc(sizeof(vertex_t));
         (*thither)->xpos = hither->xpos;
         (*thither)->ypos = hither->ypos;
     }
@@ -961,7 +964,7 @@ void monster_list(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *pl
     uint16_t i, j, k;
     int8_t vertical_amount, horizontal_amount;
     char vertical[6], horizontal[5];
-    character_t **monster_list = malloc(sizeof(character_t) * num_init_monsters);
+    character_t **monster_list = (character_t **) malloc(sizeof(character_t) * num_init_monsters);
     for (i = 0; i < W_HEIGHT; i++) {
         for (j = 0; j < W_WIDTH; j++) {
             if (character_map[i][j] != NULL && character_map[i][j] != player) {

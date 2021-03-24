@@ -1,16 +1,18 @@
 #ifndef STACK_H
 #define STACK_H
 
-typedef struct stack_node stack_node_t;
+typedef class stack_node stack_node_t;
 
-struct stack_node {
-    void *value;
-    stack_node_t *next;
+class stack_node {
+    public:
+        void *value;
+        stack_node_t *next;
 };
 
-typedef struct stack {
-    stack_node_t *top;
-    int size;
+typedef class stack {
+    public:
+        stack_node_t *top;
+        int size;
 } stack_t;
 
 int stack_init(stack_t *s);
