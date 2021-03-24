@@ -1,35 +1,18 @@
-Name: Arvid Gustafson.
+ARVID GUSTAFSON
 
-QUIT, WALK_DOWN, WALK_UP, RESET, MON_LIST and ESCAPE are masks that take advantage of the player's characteristics variable.
+All code was converted to C++.
 
-Note: Code from 1.04 was just now split into different functions.
+All structs were made into classes with public fields.
 
-init_ncurses initializes ncurses.
+FOG and TELEPORT masks were added, and the size of the characteristics fields fo the character struct was increased.
 
-deinit_ncurses deinitializes ncurses.
+The teleport_command function facilitates selecting a point to teleport to; it can be given some character map to display while making the selection; it goes until either:
+    a) The player chooses a point to teleport to with 'g'
+    b) The player cancels the action with ESCAPE
+    c) The player quits with 'Q'
 
-derive_next_turn_heap derives the next turn heap.
+Teleporting does not count as a turn, but does behave like a move, so it does kill monsters.
 
-derive move stack derives the move stack.
+The sketch_visible_map function updates the visual map with information from the (base) map and the character map; monster positions are not remembered.
 
-player_command fetches the command from the player.
-
-monster_turn executes the turn of a monster.
-
-line_of_sight finds if a monster can see the player.
-
-smart_move picks the cell a smart monster would move to.
-
-dumb_move picks the cell a dumb monster would move to.
-
-random_move picks a random cell a monster could move to.
-
-tunnel decreases the hardness of a rock.
-
-move_character actually moves a character; combat is done here.
-
-monster_list brings up the monster list.
-
-monster_list_command fetches the command from the player for when within the monster_list.
-
-draw_quit draws a message for when the player quits.
+As per the spec, no changes were made to the monster list, so all the monsters are shown thereon.
