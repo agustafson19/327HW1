@@ -1,3 +1,52 @@
+commit bc146ee1b2d9448f22a654dd1d5573c466bb0b5c
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 24 18:24:36 2021 -0500
+
+    Updated the README file
+
+commit 4b4d0403460ffb57ea99353314052417d74f5943
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 24 18:11:42 2021 -0500
+
+    Finnished Assignment 1.06
+    
+    Added Fog of war, an 'f' command that toggles it, and a 'g' command that
+    enables teleportation. Last monster locations are not seen, the fog of
+    war does not appear while choosing where to teleport to. As per the
+    spec, the mosnter list is completely unchanged, and thus lists all monsters.
+
+commit dd6370a20105981ca2a4a4649983daa1721af851
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 24 13:52:29 2021 -0500
+
+    Updated makefile and classified structs
+    
+    Updated makefile so that it works, and made every struct a class.
+
+commit 8eca88a289f72a2fda959f0a39b91424f1fe37ac
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 24 10:46:58 2021 -0500
+
+    Changed file names to conform to C++ standards
+
+commit b75471e0c9ffd973eb3db0a75ac7c370ee221d0e
+Author: arvidg <arvidg@iastate.edu>
+Date:   Wed Mar 24 10:42:15 2021 -0500
+
+    Added 1.06 instructions
+
+commit 0da95871e787f5bfd7614acd6df4a7bde9ece281
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 10 20:01:26 2021 -0600
+
+    Added file for submission
+
+commit 80798cedf97462eebb58473386ba3ac34fb635ef
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 10 19:57:55 2021 -0600
+
+    Updated the Changelog
+
 commit 32412403eb384209d14426b16c49762aaa0b649a
 Author: agustafson19 <arvidg@iastate.edu>
 Date:   Wed Mar 10 19:57:10 2021 -0600
