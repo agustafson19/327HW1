@@ -1,3 +1,31 @@
+commit 428598b60d913c236d246e43e90f703dae90f964
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 31 21:07:34 2021 -0500
+
+    Finished 1.07
+    
+    Finished 1.07, including the makefile and README
+
+commit 583a18f6d03a054d836bed2ad6f721f53b18f387
+Author: arvidg <arvidg@iastate.edu>
+Date:   Wed Mar 31 16:27:19 2021 -0500
+
+    Added instructions for 1.07
+
+commit 42c936872239e6350e81100ea3801db30fe97b76
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 24 18:27:46 2021 -0500
+
+    Added an archive to turn in
+    
+    Added the submission for Assignment 1.06
+
+commit 4af2f88e3598dc30fc5eb72e99e12f38b606a2cc
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 24 18:25:07 2021 -0500
+
+    Updated the CHANGELOG
+
 commit bc146ee1b2d9448f22a654dd1d5573c466bb0b5c
 Author: agustafson19 <arvidg@iastate.edu>
 Date:   Wed Mar 24 18:24:36 2021 -0500
