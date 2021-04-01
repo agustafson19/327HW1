@@ -1,18 +1,12 @@
 ARVID GUSTAFSON
 
-All code was converted to C++.
+The main function currently prints out the monster list loaded from HOME/.rlg327/monster_desc.txt
+ 
+The dice class was added. This represents a basic statistic, with a base value, a number of times a dice that will be rolled, and the number of sides thereon. The toss function resembles a number derived from the three integer values, but it has not been tested.
 
-All structs were made into classes with public fields.
+The monster_template struct was added, as a template, or type, of monster.
 
-FOG and TELEPORT masks were added, and the size of the characteristics fields fo the character struct was increased.
+The load_monster_dictionary function loads a monster dictionary from HOME/.rlg327/monster_desc.txt, and it returns an error code. 0 means no errors were detected. 1 means "RLG327 MONSTER DESCRIPTION 1" was not the first line. 2 means an invalid color was recieved. 3 means an invalid ability was recieved. 4 means an invalid property was recieved. 5 means insufficient properties were recieved.
 
-The teleport_command function facilitates selecting a point to teleport to; it can be given some character map to display while making the selection; it goes until either:
-    a) The player chooses a point to teleport to with 'g'
-    b) The player cancels the action with ESCAPE
-    c) The player quits with 'Q'
 
-Teleporting does not count as a turn, but does behave like a move, so it does kill monsters.
-
-The sketch_visible_map function updates the visual map with information from the (base) map and the character map; monster positions are not remembered.
-
-As per the spec, no changes were made to the monster list, so all the monsters are shown thereon.
+The print_monster_dictionary function prints a monster dictionary using cout.
