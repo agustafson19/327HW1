@@ -66,7 +66,7 @@ typedef class custom_vector {
         int ypos;
 } custom_vector_t;
 
-typedef struct monster_template {
+typedef class monster_template {
     public:
         std::string name;
         char symbol;
