@@ -1,12 +1,24 @@
 ARVID GUSTAFSON
 
-The main function currently prints out the monster list loaded from HOME/.rlg327/monster_desc.txt
- 
-The dice class was added. This represents a basic statistic, with a base value, a number of times a dice that will be rolled, and the number of sides thereon. The toss function resembles a number derived from the three integer values, but it has not been tested.
+Added macros MONSTER_EXISTS and ITEM_EXISTS to implement UNIQ and BOSS monsters, and RELIC items.
 
-The monster_template struct was added, as a template, or type, of monster.
+Added item_t and item_template_t classes, alongside load_item_dictionary and print_monster_dictionary functions.
 
-The load_monster_dictionary function loads a monster dictionary from HOME/.rlg327/monster_desc.txt, and it returns an error code. 0 means no errors were detected. 1 means "RLG327 MONSTER DESCRIPTION 1" was not the first line. 2 means an invalid color was recieved. 3 means an invalid ability was recieved. 4 means an invalid property was recieved. 5 means insufficient properties were recieved.
+Added entity_t class, extended by character_t and item_t, and a monster_t which extends character_t.
 
+Added instantiate method to monster_template_t and item_template_t, making them factories.
 
-The print_monster_dictionary function prints a monster dictionary using cout.
+Every class related to entities were put into entity.h and entity.cpp.
+
+Re-made generate_monsters function, and added generate_items function.
+    Chance for a monster type to spawn: monster type's rarity / sum of all mosnter type's rarity
+
+The sketch_map function was removed.
+
+The draw function was split into draw_fog and draw_full functions.
+
+Added color; color of highest priority is used; descending priority: BLACK RED GREEN YELLOW BLUE MAGENTA CYAN WHITE; BLACK is the same as WHITE
+
+Added object permanence to UNIQ and BOSS mosnters, and RELIC items, and each only spawns once.
+
+BOSS mosnters always spawn on the first level.
