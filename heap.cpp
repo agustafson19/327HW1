@@ -1,8 +1,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include "vertex.h"
 #include "heap.h"
+#include "vertex.h"
 
 int heap_init(heap_t *h)
 {
