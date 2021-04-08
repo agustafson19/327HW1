@@ -23,10 +23,12 @@
 #define W_WIDTH 80
 #define W_HEIGHT 21
 
+/* Arguments */
 #define SAVE 0x01
 #define LOAD 0x02
 #define NUM_MON 0x04
 
+/* Monster */
 #define SMART 0x0001
 #define TELE 0x0002
 #define TUNNEL 0x0004
@@ -35,38 +37,58 @@
 #define PICKUP 0x0020
 #define DESTROY 0x0040
 #define UNIQ 0x0080
-#define BOSS 0x0100
+#define MONSTER_EXISTS 0x0100
+#define BOSS 0x0200
 
 /* Used for Logic */
 #define ALIVE 0x0200
 #define KNOWN 0x0400
 #define SEE 0x0800
 
+/* Item */
+#define RELIC 0x01
+#define ITEM_EXISTS 0x02
+
+/* Player */
 #define QUIT 0x01
 #define WALK_DOWN 0x02
 #define WALK_UP 0x04
 #define RESET 0x08
+#define MON_LIST 0x10
+#define ESCAPE 0x20
+#define FOG 0x40
+#define TELEPORT 0x80
 /* ALIVE is reserved */
-#define MON_LIST 0x20
-#define ESCAPE 0x40
-#define FOG 0x80
-#define TELEPORT 0x100
 
-typedef class room {
+class room_t {
     public:
         uint8_t xpos;
         uint8_t ypos;
         uint8_t xsize;
         uint8_t ysize;
-} room_t;
+};
 
-typedef class custom_vector {
+class custom_vector_t {
     public:
         int xpos;
         int ypos;
-} custom_vector_t;
+};
 
-typedef class monster_template {
+class entity_t {
+    public:
+        uint8_t xpos;
+        uint8_t ypos;
+        char symbol;
+};
+
+class character_t : public entity_t {
+    public:
+        uint16_t data;
+        uint16_t sequence;
+        uint8_t speed;
+};
+
+class monster_template_t {
     public:
         std::string name;
         char symbol;
@@ -77,71 +99,266 @@ typedef class monster_template {
         Dice_t hitpoints;
         Dice_t damage;
         uint8_t rarity;
-} monster_template_t;
+};
 
-typedef class character {
+class monster_t : public character_t {
     public:
-        uint8_t xpos;
-        uint8_t ypos;
-        char symbol;
-        uint16_t sequence;
-        uint16_t characteristics;
-        uint8_t speed;
+        monster_template_t *entry;
+        uint32_t hitpoints;
         vertex_t known_location;
-} character_t;
+};
 
-int real_main(int argc, char *argv[]);
+class item_template_t {
+    public:
+        std::string name;
+        char symbol;
+        uint8_t color;
+        std::vector<std::string> description;
+        Dice_t speed_bonus;
+        Dice_t attributes;
+        uint8_t data;
+        Dice_t hitpoint_bonus;
+        Dice_t damage_bonus;
+        Dice_t dodge_bonus;
+        Dice_t defence_bonus;
+        Dice_t weight;
+        Dice_t value;
+        uint8_t rarity;
+};
 
-void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_init_monsters);
+class item_t : public entity_t {
+    public:
+        item_template_t *entry;
+        uint32_t speed_bonus;
+        uint32_t attributes;
+        uint32_t hitpoint_bonus;
+        uint32_t dodge_bonus;
+        uint32_t defence_bonus;
+        uint32_t weight;
+        uint32_t value;
+};
 
-void generate(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, character_t **u_stairs, uint16_t *num_d_stairs, character_t **d_stairs);
-
-void save(character_t *player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms, uint16_t num_u_stairs, character_t *u_stairs, uint16_t num_d_stairs, character_t *d_stairs);
-void load(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, character_t **u_stairs, uint16_t *num_d_stairs, character_t **d_stairs);
-
-int load_monster_dictionary(std::vector<monster_template_t> *monster_dictionary);
-void print_monster_dictionary(std::vector<monster_template_t> monster_dictionary);
-
-void map_rooms(char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms);
-
+/* Initializations */
 void init_ncurses();
 void deinit_ncurses();
 
 void init_map(char map[W_HEIGHT][W_WIDTH], char c);
 void sketch_map(char display[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
+void init_entity_map(entity_t *character_map[W_HEIGHT][W_WIDTH]);
 
-void init_character_map(character_t *character_map[W_HEIGHT][W_WIDTH]);
-void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player);
-void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], room_t *rooms, uint16_t num_rooms, uint16_t num_init_monsters);
+int load_monster_dictionary(std::vector<monster_template_t> *monster_dictionary);
+int load_item_dictionary(std::vector<item_template_t> *item_dictionary);
 
-void dijkstra(uint8_t hardness[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], character_t *player, uint16_t distance[W_HEIGHT][W_WIDTH], uint8_t tunnel);
-void get_neighbors(stack_t *s, vertex_t *v, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint8_t tunnel);
+void get_args (
+        int argc,
+        char *argv[],
+        uint8_t *args,
+        uint16_t *num_init_monsters
+);
 
-void derive_next_turn_heap(heap_t *characters, heap_t *next_turn, uint32_t *priority);
-void derive_move_stack(stack_t *move_stack, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], character_t *character, vertex_t *hither, vertex_t **thither);
+/* Generating Terrain */
+void generate (
+        character_t **player,
+        uint8_t hardness[W_HEIGHT][W_WIDTH],
+        uint16_t *num_rooms,
+        room_t **rooms,
+        uint16_t *num_u_stairs,
+        entity_t **u_stairs,
+        uint16_t *num_d_stairs,
+        entity_t **d_stairs
+);
 
-void player_command(character_t *player, vertex_t *thither, const char visible_map[W_HEIGHT][W_WIDTH], const char display[W_HEIGHT][W_WIDTH]);
-void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t floor_distance[W_HEIGHT][W_WIDTH], uint16_t tunnel_distance[W_HEIGHT][W_WIDTH], vertex_t *hither, vertex_t **thither, uint16_t *num_monsters);
+void save (
+        character_t *player,
+        uint8_t hardness[W_HEIGHT][W_WIDTH],
+        uint16_t num_rooms,
+        room_t *rooms,
+        uint16_t num_u_stairs,
+        entity_t *u_stairs,
+        uint16_t num_d_stairs,
+        entity_t *d_stairs
+);
 
-void line_of_sight(character_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH]);
-void smart_move(stack_t *move_stack, character_t *character, vertex_t **thither, uint16_t distance[W_HEIGHT][W_WIDTH]);
-void dumb_move(stack_t *move_stack, character_t *character, character_t *player, vertex_t *hither, vertex_t **thither);
-void random_move(stack_t *move_stack, vertex_t **thither);
+void load (
+        character_t **player,
+        uint8_t hardness[W_HEIGHT][W_WIDTH],
+        uint16_t *num_rooms,
+        room_t **rooms,
+        uint16_t *num_u_stairs,
+        entity_t **u_stairs,
+        uint16_t *num_d_stairs,
+        entity_t **d_stairs
+);
 
-void tunnel(uint8_t hardness[W_HEIGHT][W_WIDTH], character_t *player, uint16_t floor_distance[W_HEIGHT][W_WIDTH], uint16_t tunnel_distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], vertex_t *thither);
-void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, vertex_t *hither, vertex_t *thither, uint16_t *num_monsters);
+void map_rooms (
+        char map[W_HEIGHT][W_WIDTH],
+        uint8_t hardness[W_HEIGHT][W_WIDTH],
+        uint16_t num_rooms,
+        room_t *rooms
+);
 
-void teleport_command(character_t *player, vertex_t *thither, char display[W_HEIGHT][W_WIDTH]);
+/* Generating Entities */
+void init_player(
+        heap_t *characters,
+        character_t *character_map[W_HEIGHT][W_WIDTH],
+        character_t *player
+);
 
-void monster_list(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player, uint16_t num_init_monsters);
-void monster_list_command(character_t *player);
+void generate_monsters(
+        std::vector<monster_template_t> monster_dictionary,
+        heap_t *characters,
+        character_t *character_map[W_HEIGHT][W_WIDTH],
+        char map[W_HEIGHT][W_WIDTH],
+        uint16_t num_init_monsters
+);
 
-void place(char display[W_HEIGHT][W_WIDTH], character_t *entities, uint16_t count);
-void place_characters(char display[W_HEIGHT][W_WIDTH], character_t *characters[W_HEIGHT][W_WIDTH]);
+void generate_items(
+        std::vector<item_template_t> item_dictionary,
+        item_t *item_map[W_HEIGHT][W_WIDTH],
+        char map[W_HEIGHT][W_WIDTH],
+        uint16_t num_init_items
+);
 
-void sketch_visible_map(char visible_map[W_HEIGHT][W_WIDTH], const char map[W_HEIGHT][W_WIDTH], const char display[W_HEIGHT][W_WIDTH], const character_t *player);
+/* Graph Related Things */
+void dijkstra(
+        uint8_t hardness[W_HEIGHT][W_WIDTH],
+        char map[W_HEIGHT][W_WIDTH],
+        character_t *player,
+        uint16_t distance[W_HEIGHT][W_WIDTH],
+        uint8_t tunnel
+);
 
-void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
+void get_neighbors(
+        stack_t *s,
+        vertex_t *v,
+        char map[W_HEIGHT][W_WIDTH],
+        uint8_t hardness[W_HEIGHT][W_WIDTH],
+        uint8_t tunnel
+);
+
+/* Turn Mechanisms */
+void derive_next_turn_heap(
+        heap_t *characters,
+        heap_t *next_turn,
+        uint32_t *priority
+);
+
+void derive_move_stack(
+        stack_t *move_stack,
+        char map[W_HEIGHT][W_WIDTH],
+        uint8_t hardness[W_HEIGHT][W_WIDTH],
+        character_t *character,
+        vertex_t *hither,
+        vertex_t **thither
+);
+
+void player_command(
+        character_t *player,
+        vertex_t *thither,
+        const char
+        visible_map[W_HEIGHT][W_WIDTH],
+        const char display[W_HEIGHT][W_WIDTH]
+);
+
+void monster_turn(
+        stack_t *move_stack,
+        character_t *character_map[W_HEIGHT][W_WIDTH],
+        monster_t *character,
+        character_t *player,
+        char map[W_HEIGHT][W_WIDTH],
+        uint8_t hardness[W_HEIGHT][W_WIDTH],
+        uint16_t floor_distance[W_HEIGHT][W_WIDTH],
+        uint16_t tunnel_distance[W_HEIGHT][W_WIDTH],
+        vertex_t *hither,
+        vertex_t **thither,
+        uint16_t *num_monsters
+);
+
+void line_of_sight(
+        monster_t *character,
+        character_t *player,
+        char map[W_HEIGHT][W_WIDTH]
+);
+
+/* Movemnet */
+void smart_move(
+        stack_t *move_stack,
+        character_t *character,
+        vertex_t **thither,
+        uint16_t distance[W_HEIGHT][W_WIDTH]
+);
+
+void dumb_move(
+        stack_t *move_stack,
+        character_t *character,
+        character_t *player,
+        vertex_t *hither,
+        vertex_t **thither
+);
+
+void random_move(
+        stack_t *move_stack,
+        vertex_t **thither
+);
+
+void tunnel(
+        uint8_t hardness[W_HEIGHT][W_WIDTH],
+        character_t *player,
+        uint16_t floor_distance[W_HEIGHT][W_WIDTH],
+        uint16_t tunnel_distance[W_HEIGHT][W_WIDTH],
+        char map[W_HEIGHT][W_WIDTH],
+        vertex_t *thither
+);
+
+void move_character(
+        character_t *character_map[W_HEIGHT][W_WIDTH],
+        character_t *character,
+        vertex_t *hither,
+        vertex_t *thither,
+        uint16_t *num_monsters
+);
+
+/* Special Commands */
+void teleport_command(
+        character_t *player,
+        vertex_t *thither,
+        char display[W_HEIGHT][W_WIDTH]);
+
+void monster_list(
+        character_t *character_map[W_HEIGHT][W_WIDTH],
+        character_t *player,
+        uint16_t num_init_monsters
+);
+
+void monster_list_command(
+        character_t *player
+);
+
+/* Mapping */
+void place(
+        char display[W_HEIGHT][W_WIDTH],
+        entity_t *entities,
+        uint16_t count
+);
+
+void place_characters(
+        char display[W_HEIGHT][W_WIDTH],
+        character_t *characters[W_HEIGHT][W_WIDTH]
+);
+
+void sketch_visible_map(
+        char visible_map[W_HEIGHT][W_WIDTH],
+        const char map[W_HEIGHT][W_WIDTH],
+        const char display[W_HEIGHT][W_WIDTH],
+        const character_t *player
+);
+
+/* Debugging */
+void print_monster_dictionary(std::vector<monster_template_t> monster_dictionary);
+void print_item_dictionary(std::vector<item_template_t> item_dictionary);
+void draw_distance( uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
+
+/* Drawing */
 void draw(const char display[W_HEIGHT][W_WIDTH]);
 
 void draw_quit();
@@ -149,18 +366,6 @@ void draw_win();
 void draw_loose();
 
 int main(int argc, char *argv[])
-{
-    std::vector<monster_template_t> monster_dictionary;
-    int error = load_monster_dictionary(&monster_dictionary);
-    if (error) {
-        std::cout << "Load Failed: " << error << std::endl;
-    }
-    print_monster_dictionary(monster_dictionary);
-
-    return 0;
-}
-
-int real_main(int argc, char *argv[])
 {
     /* Initializing Ncurses */
     init_ncurses();
@@ -177,11 +382,14 @@ int real_main(int argc, char *argv[])
     uint16_t num_rooms;
     room_t *rooms;
     uint16_t num_u_stairs;
-    character_t *u_stairs;
+    entity_t *u_stairs;
     uint16_t num_d_stairs;
-    character_t *d_stairs;
+    entity_t *d_stairs;
+    std::vector<monster_template_t> monster_dictionary;
     uint16_t num_init_monsters;
     uint16_t num_monsters;
+    std::vector<item_template_t> item_dictionary;
+    uint16_t num_init_items;
     heap_t characters;
     uint32_t priority;
     heap_t next_turn;
@@ -190,6 +398,7 @@ int real_main(int argc, char *argv[])
     vertex_t *thither;
     stack_t move_stack;
     character_t *character_map[W_HEIGHT][W_WIDTH];
+    item_t *item_map[W_HEIGHT][W_WIDTH];
     char map[W_HEIGHT][W_WIDTH];
     char display[W_HEIGHT][W_WIDTH];
     char visible_map[W_HEIGHT][W_WIDTH];
@@ -214,34 +423,47 @@ int real_main(int argc, char *argv[])
 
     /* Generating Characters */
     heap_init(&characters);
-    init_character_map(character_map);
+    init_entity_map((entity_t *(*)[80]) character_map);
     init_player(&characters, character_map, player);
+    if (load_monster_dictionary(&monster_dictionary)) {
+        deinit_ncurses();
+        return 1;
+    }
     if (!(args & NUM_MON))
         num_init_monsters = 10;
-    num_init_monsters = num_init_monsters < 1481 ? num_init_monsters : 1481;
-    generate_monsters(&characters, character_map, map, rooms, num_rooms, num_init_monsters);
+    num_init_monsters = num_init_monsters < 100 ? num_init_monsters : 100;
+    generate_monsters(monster_dictionary, &characters, character_map, map, num_init_monsters);
     num_monsters = num_init_monsters;
+
+    /* Generating Items */
+    num_init_items = 10;
+    init_entity_map((entity_t *(*)[80]) item_map);
+    if (load_item_dictionary(&item_dictionary)) {
+        deinit_ncurses();
+        return 2;
+    }
+    generate_items(item_dictionary, item_map, map, num_init_items);
 
     /* Finding Initial Distances */
     dijkstra(hardness, map, player, floor_distance, 0);
     dijkstra(hardness, map, player, tunnel_distance, 1);
 
     /* Main Loop */
-    while (player->characteristics & ALIVE && num_monsters && !(player->characteristics & QUIT)) {
+    while (player->data & ALIVE && num_monsters && !(player->data & QUIT)) {
         derive_next_turn_heap(&characters, &next_turn, &priority);
         /* Character Turn */
-        while (heap_size(&next_turn) > 0 && !(player->characteristics & RESET)) {
-            player->characteristics &= ~RESET;
+        while (heap_size(&next_turn) > 0 && !(player->data & RESET)) {
+            player->data &= ~RESET;
             heap_extract_min(&next_turn, (void**) &character);
-            if (character->characteristics & ALIVE) {
+            if (character->data & ALIVE) {
                 if (character == player) {
                     do {
-                        player->characteristics &= ~MON_LIST;
-                        player->characteristics &= ~TELEPORT;
+                        player->data &= ~MON_LIST;
+                        player->data &= ~TELEPORT;
                         sketch_map(display, map);
                         place_characters(display, character_map);
                         sketch_visible_map(visible_map, map, display, player);
-                        if (player->characteristics & FOG)
+                        if (player->data & FOG)
                             draw(visible_map);
                         else
                             draw(display);
@@ -256,11 +478,11 @@ int real_main(int argc, char *argv[])
                         dijkstra(hardness, map, player, floor_distance, 0);
                         dijkstra(hardness, map, player, tunnel_distance, 1);
                         free(thither);
-                        if (player->characteristics & MON_LIST) {
+                        if (player->data & MON_LIST) {
                             monster_list(character_map, player, num_monsters);
                         }
-                        if ((player->characteristics & WALK_UP && player->xpos == u_stairs->xpos && player->ypos == u_stairs->ypos) ||
-                            (player->characteristics & WALK_DOWN && player->xpos == d_stairs->xpos && player->ypos == d_stairs->ypos)) {
+                        if ((player->data & WALK_UP && player->xpos == u_stairs->xpos && player->ypos == u_stairs->ypos) ||
+                            (player->data & WALK_DOWN && player->xpos == d_stairs->xpos && player->ypos == d_stairs->ypos)) {
                             /* new floor */
                             free(player);
                             free(rooms);
@@ -268,39 +490,39 @@ int real_main(int argc, char *argv[])
                             free(d_stairs);
                             heap_delete(&characters);
                             generate(&player, hardness, &num_rooms, &rooms, &num_u_stairs, &u_stairs, &num_d_stairs, &d_stairs);
-                            player->characteristics |= RESET;
+                            player->data |= RESET;
                             init_map(map, ' ');
                             init_map(visible_map, ' ');
                             map_rooms(map, hardness, num_rooms, rooms);
                             place(map, u_stairs, num_u_stairs);
                             place(map, d_stairs, num_d_stairs);
                             heap_init(&characters);
-                            init_character_map(character_map);
+                            init_entity_map((entity_t *(*)[80]) character_map);
                             init_player(&characters, character_map, player);
-                            generate_monsters(&characters, character_map, map, rooms, num_rooms, num_init_monsters);
+                            generate_monsters(monster_dictionary, &characters, character_map, map, num_init_monsters);
                             num_monsters = num_init_monsters;
                             dijkstra(hardness, map, player, floor_distance, 0);
                             dijkstra(hardness, map, player, tunnel_distance, 1);
                         }
-                        else if (!(player->characteristics & (MON_LIST | TELEPORT) && !(player->characteristics & QUIT))){
+                        else if (!(player->data & (MON_LIST | TELEPORT) && !(player->data & QUIT))){
                             heap_add(&characters, character, priority + 1000 / character->speed);
                         }
-                        if (player->characteristics & TELEPORT) {
+                        if (player->data & TELEPORT) {
                             thither = (vertex_t *) malloc(sizeof(vertex_t));
                             thither->ypos = player->ypos;
                             thither->xpos = player->xpos;
                             teleport_command(player, thither, display);
-                            if (!(player->characteristics & ESCAPE)) {
+                            if (!(player->data & ESCAPE)) {
                                 move_character(character_map, character, &hither, thither, &num_monsters);
                             }
                             free(thither);
                         }
-                    } while (player->characteristics & (MON_LIST | TELEPORT) && !(player->characteristics & QUIT) && num_monsters);
+                    } while (player->data & (MON_LIST | TELEPORT) && !(player->data & QUIT) && num_monsters);
                 }
                 else {
                     heap_add(&characters, character, priority + 1000 / character->speed);
                     derive_move_stack(&move_stack, map, hardness, character, &hither, &thither);
-                    monster_turn(&move_stack, character_map, character, player, map, hardness, floor_distance, tunnel_distance, &hither, &thither, &num_monsters);
+                    monster_turn(&move_stack, character_map, (monster_t *) character, player, map, hardness, floor_distance, tunnel_distance, &hither, &thither, &num_monsters);
                     stack_delete(&move_stack);
                     free(thither);
                 }
@@ -316,14 +538,14 @@ int real_main(int argc, char *argv[])
 
     /* Printing Results */
     clear();
-    if (player->characteristics & QUIT)
+    if (player->data & QUIT)
         draw_quit();
-    else if (player->characteristics & ALIVE)
+    else if (player->data & ALIVE)
         draw_win();
     else
         draw_loose();
 
-    /* Cleaning Memory */
+    /* Cleaning Memory TODO FIX MEMORY LEAKS */
     free(rooms);
     free(u_stairs);
     free(d_stairs);
@@ -338,220 +560,47 @@ int real_main(int argc, char *argv[])
     return 0;
 }
 
-void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_init_monsters)
+void init_ncurses()
 {
-    uint8_t i;
-    for (i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "--save")) {
-            *args |= SAVE;
-        }
-        else if (!strcmp(argv[i], "--load")) {
-            *args |= LOAD;
-        }
-        else if (!strcmp(argv[i], "--nummon")) {
-            *args |= NUM_MON;
-            sscanf(argv[++i], "%hd", num_init_monsters);
+    initscr();
+    raw();
+    noecho();
+    curs_set(0);
+    keypad(stdscr, TRUE);
+}
+
+void deinit_ncurses() {
+    endwin();
+}
+
+void init_map(char map[W_HEIGHT][W_WIDTH], char c)
+{
+    uint8_t i, j;
+    for (i = 0; i < W_HEIGHT; i++) {
+        for (j = 0; j < W_WIDTH; j++) {
+            map[i][j] = c;
         }
     }
 }
 
-void generate(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, character_t **u_stairs, uint16_t *num_d_stairs, character_t **d_stairs)
+void sketch_map(char display[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH])
 {
-    uint16_t i, j;
-    uint8_t v;
-    *num_rooms = 6 + rand() % 2;
-    *rooms = (room_t *) malloc(sizeof(room_t) * *num_rooms);
-    do {
-        for (i = 0; i < *num_rooms; i++) {
-            (*rooms)[i].xsize = 4 + rand() % 10;
-            (*rooms)[i].ysize = 3 + rand() % 10;
-            (*rooms)[i].xpos = 1 + rand() % (W_WIDTH - (*rooms)[i].xsize - 2);
-            (*rooms)[i].ypos = 1 + rand() % (W_HEIGHT - (*rooms)[i].ysize - 2);
-        }
-        v = 1;
-        for (i = 1; i < *num_rooms && v; i++) {
-            for (j = 0; j < i && v; j++) {
-                if (!((*rooms)[i].xpos + (*rooms)[i].xsize < (*rooms)[j].xpos || (*rooms)[j].xpos + (*rooms)[j].xsize < (*rooms)[i].xpos)
-                        && !((*rooms)[i].ypos + (*rooms)[i].ysize < (*rooms)[j].ypos || (*rooms)[j].ypos + (*rooms)[j].ysize < (*rooms)[i].ypos)) {
-                    v = 0;
-                }
-            }
-        }
-    } while(!v);
-    *player = (character_t *) malloc(sizeof(character_t));
-    i = rand() % *num_rooms;
-    (*player)->xpos = (*rooms)[i].xpos + rand() % (*rooms)[i].xsize;
-    (*player)->ypos = (*rooms)[i].ypos + rand() % (*rooms)[i].ysize;
-    (*player)->symbol = '@';
-    *num_u_stairs = 1;
-    *u_stairs = (character_t *) malloc(sizeof(character_t));
-    (*u_stairs)->xpos = (*rooms)[2].xpos + 1;
-    (*u_stairs)->ypos = (*rooms)[2].ypos + 1;
-    (*u_stairs)->symbol = '<';
-    *num_d_stairs = 1;
-    *d_stairs = (character_t *) malloc(sizeof(character_t));
-    (*d_stairs)->xpos = (*rooms)[*num_rooms - 1].xpos + 1;
-    (*d_stairs)->ypos = (*rooms)[*num_rooms - 1].ypos + 1;
-    (*d_stairs)->symbol = '>';
+    uint8_t i, j;
     for (i = 0; i < W_HEIGHT; i++) {
         for (j = 0; j < W_WIDTH; j++) {
-            hardness[i][j] = 0x80;
-        }
-    }
-    for (i = 0; i < W_HEIGHT; i++) {
-        hardness[i][0] = 0xFF;
-        hardness[i][W_WIDTH-1] = 0xFF;
-    }
-    for (j = 0; j < W_WIDTH; j++) {
-        hardness[0][j] = 0xFF;
-        hardness[W_HEIGHT-1][j] = 0xFF;
-    }
-    for (i = 1; i < *num_rooms; i++) {
-        for (j = (*rooms)[i-1].ypos + (*rooms)[i-1].ysize / 2; j <= (*rooms)[i].ypos + (*rooms)[i].ysize / 2; j++) {
-            hardness[j][(*rooms)[i-1].xpos + (*rooms)[i-1].xsize / 2] = 0;
-        }
-        for (j = (*rooms)[i-1].ypos + (*rooms)[i-1].ysize / 2; j >= (*rooms)[i].ypos + (*rooms)[i].ysize / 2; j--) {
-            hardness[j][(*rooms)[i-1].xpos + (*rooms)[i-1].xsize / 2] = 0;
-        }
-        for (j = (*rooms)[i-1].xpos + (*rooms)[i-1].xsize / 2; j <= (*rooms)[i].xpos + (*rooms)[i].xsize / 2; j++) {
-            hardness[(*rooms)[i].ypos + (*rooms)[i].ysize / 2][j] = 0;
-        }
-        for (j = (*rooms)[i-1].xpos + (*rooms)[i-1].xsize / 2; j >= (*rooms)[i].xpos + (*rooms)[i].xsize / 2; j--) {
-            hardness[(*rooms)[i].ypos + (*rooms)[i].ysize / 2][j] = 0;
+            display[i][j] = map[i][j];
         }
     }
 }
 
-void save(character_t *player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms, uint16_t num_u_stairs, character_t *u_stairs, uint16_t num_d_stairs, character_t *d_stairs)
+void init_entity_map(entity_t *character_map[W_HEIGHT][W_WIDTH])
 {
-    uint16_t i;
-    uint8_t j;
-    uint8_t w_byte;
-    uint16_t w_short;
-    uint32_t w;
-    char version[13] = "RLG327-@2021";
-    char *home = getenv("HOME");
-    const char *gamedir = ".rlg327";
-    const char *save = "dungeon";
-    char *path = (char *) malloc(strlen(home) + strlen(gamedir) + strlen(save) + 3);
-    sprintf(path, "%s/%s/%s", home, gamedir, save);
-    FILE *f = fopen(path, "w");
-    for (i = 0; i < 12; i++) {
-        fwrite(&version[i], sizeof(char), 1, f);
-    }
-    w = htobe32(0);
-    fwrite(&w, sizeof(uint32_t), 1, f);
-    w = htobe32(1708 + num_rooms * 4 + num_u_stairs * 2 + num_d_stairs * 2);
-    fwrite(&w, sizeof(uint32_t), 1, f);
-    w_byte = player->xpos;
-    fwrite(&w_byte, sizeof(uint8_t), 1, f);
-    w_byte = player->ypos;
-    fwrite(&w_byte, sizeof(uint8_t), 1, f);
+    uint8_t i, j;
     for (i = 0; i < W_HEIGHT; i++) {
         for (j = 0; j < W_WIDTH; j++) {
-            w_byte = hardness[i][j];
-            fwrite(&w_byte, sizeof(uint8_t), 1, f);
+            character_map[i][j] = NULL;
         }
     }
-    w_short = htobe16(num_rooms);
-    fwrite(&w_short, sizeof(uint16_t), 1, f);
-    for (i = 0; i < num_rooms; i++) {
-        w_byte = rooms[i].xpos;
-        fwrite(&w_byte, sizeof(uint8_t), 1, f);
-        w_byte = rooms[i].ypos;
-        fwrite(&w_byte, sizeof(uint8_t), 1, f);
-        w_byte = rooms[i].xsize;
-        fwrite(&w_byte, sizeof(uint8_t), 1, f);
-        w_byte = rooms[i].ysize;
-        fwrite(&w_byte, sizeof(uint8_t), 1, f);
-    }
-    w_short = htobe16(num_u_stairs);
-    fwrite(&w_short, sizeof(uint16_t), 1, f);
-    for (i = 0; i < num_u_stairs; i++) {
-        w_byte = u_stairs[i].xpos;
-        fwrite(&w_byte, sizeof(uint8_t), 1, f);
-        w_byte = u_stairs[i].ypos;
-        fwrite(&w_byte, sizeof(uint8_t), 1, f);
-    }
-    w_short = htobe16(num_d_stairs);
-    fwrite(&w_short, sizeof(uint16_t), 1, f);
-    for (i = 0; i < num_d_stairs; i++) {
-        w_byte = d_stairs[i].xpos;
-        fwrite(&w_byte, sizeof(uint8_t), 1, f);
-        w_byte = d_stairs[i].ypos;
-        fwrite(&w_byte, sizeof(uint8_t), 1, f);
-    }
-    fclose(f);
-    free(path);
-}
-
-void load(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, character_t **u_stairs, uint16_t *num_d_stairs, character_t **d_stairs)
-{
-    uint16_t i;
-    uint8_t j;
-    uint16_t count = 0;
-    uint8_t r_byte;
-    uint16_t r_short;
-    uint32_t r;
-    char version[13];
-    version[12] = '\0';
-    char *home = getenv("HOME");
-    const char *gamedir = ".rlg327";
-    const char *save = "dungeon";
-    char *path = (char *) malloc(strlen(home) + strlen(gamedir) + strlen(save) + 3);
-    sprintf(path, "%s/%s/%s", home, gamedir, save);
-    FILE *f = fopen(path, "r");
-    fread(version, sizeof(char), 12, f);
-    fread(&r, sizeof(uint32_t), 1, f);
-    fread(&r, sizeof(uint32_t), 1, f);
-    *player = (character_t *) malloc(sizeof(character_t));
-    fread(&r_byte, sizeof(uint8_t), 1, f);
-    (*player)->xpos = r_byte;
-    fread(&r_byte, sizeof(uint8_t), 1, f);
-    (*player)->ypos = r_byte;
-    (*player)->symbol = '@';
-    for (i = 0; i < W_HEIGHT; i++) {
-        for (j = 0; j < W_WIDTH; j++) {
-            fread(&r_byte, sizeof(uint8_t), 1, f);
-            hardness[i][j] = r_byte;
-            count++;
-        }
-    }
-    fread(&r_short, sizeof(uint16_t), 1, f);
-    *num_rooms = be16toh(r_short);
-    *rooms = (room_t *) malloc(sizeof(room_t) * *num_rooms);
-    for (i = 0; i < *num_rooms; i++) {
-        fread(&r_byte, sizeof(uint8_t), 1, f);
-        (*rooms)[i].xpos = r_byte;
-        fread(&r_byte, sizeof(uint8_t), 1, f);
-        (*rooms)[i].ypos = r_byte;
-        fread(&r_byte, sizeof(uint8_t), 1, f);
-        (*rooms)[i].xsize = r_byte;
-        fread(&r_byte, sizeof(uint8_t), 1, f);
-        (*rooms)[i].ysize = r_byte;
-    }
-    fread(&r_short, sizeof(uint16_t), 1, f);
-    *num_u_stairs = be16toh(r_short);
-    *u_stairs = (character_t *) malloc(sizeof(character_t) * *num_u_stairs);
-    for (i = 0; i < *num_u_stairs; i++) {
-        fread(&r_byte, sizeof(uint8_t), 1, f);
-        (*u_stairs)[i].xpos = r_byte;
-        fread(&r_byte, sizeof(uint8_t), 1, f);
-        (*u_stairs)[i].ypos = r_byte;
-        (*u_stairs)[i].symbol = '<';
-    }
-    fread(&r_short, sizeof(uint16_t), 1, f);
-    *num_d_stairs = be16toh(r_short);
-    *d_stairs = (character_t *) malloc(sizeof(character_t) * *num_d_stairs);
-    for (i = 0; i < *num_d_stairs; i++) {
-        fread(&r_byte, sizeof(uint8_t), 1, f);
-        (*d_stairs)[i].xpos = r_byte;
-        fread(&r_byte, sizeof(uint8_t), 1, f);
-        (*d_stairs)[i].ypos = r_byte;
-        (*d_stairs)[i].symbol = '>';
-    }
-    fclose(f);
-    free(path);
 }
 
 int load_monster_dictionary(std::vector<monster_template_t> *monster_dictionary)
@@ -749,64 +798,544 @@ int load_monster_dictionary(std::vector<monster_template_t> *monster_dictionary)
     return 0;
 }
 
-void print_monster_dictionary(std::vector<monster_template_t> monster_dictionary)
+int load_item_dictionary(std::vector<item_template_t> *item_dictionary)
 {
-    int i, j;
-    std::vector<monster_template_t>::iterator it;
-    for (it = monster_dictionary.begin(); it != monster_dictionary.end(); it++) {
-        std::cout << "Begin Monster:" << std::endl;
-        std::cout << "Name: " << (*it).name << std::endl;
-        std::cout << "Symbol: " << (*it).symbol << std::endl;
-        std::cout << "Color:";
-        if ((*it).color & 0x01)
-            std::cout << " Black";
-        if ((*it).color & 0x02)
-            std::cout << " Red";
-        if ((*it).color & 0x04)
-            std::cout << " Green";
-        if ((*it).color & 0x08)
-            std::cout << " Yellow";
-        if ((*it).color & 0x10)
-            std::cout << " Blue";
-        if ((*it).color & 0x20)
-            std::cout << " Magenta";
-        if ((*it).color & 0x40)
-            std::cout << " Cyan";
-        if ((*it).color & 0x80)
-            std::cout << " White";
-        std::cout << std::endl;
-        std::cout << "Description:"; 
-        for (j = 0; !((*it).description[j*78] == '.' && (*it).description[j*78+1] == '\0'); j++) {
-            for (i = 0; (*it).description[j*78+i] != '\0'; i++) {
-                std::cout << (char) (*it).description[j*78+i];
+    uint16_t i, j, check;
+    item_template_t item_template;
+    std::string s;
+    char *home = getenv("HOME");
+    const char *gamedir = ".rlg327";
+    const char *file = "object_desc.txt";
+    char *path = (char *) malloc(strlen(home) + strlen(gamedir) + strlen(file) + 3);
+    sprintf(path, "%s/%s/%s", home, gamedir, file);
+    std::ifstream f(path);
+    free(path);
+    getline(f, s);
+    if (s != "RLG327 OBJECT DESCRIPTION 1")
+        return 1;
+    do {
+        getline(f, s);
+        if (s == "BEGIN OBJECT") {
+            check = 0x0000;
+            item_template.name = "";
+            do {
+                f >> s;
+                if (s == "NAME") {
+                    check |= 0x0001;
+                    f >> s;
+                    item_template.name += s;
+                    while (f.peek() != '\n') {
+                        f >> s;
+                        item_template.name += " ";
+                        item_template.name += s;
+                    }
+                }
+                else if (s == "TYPE") {
+                    check |= 0x0002;
+                    f >> s;
+                    if (s == "WEAPON")
+                        item_template.symbol = '|';
+                    else if (s == "OFFHAND")
+                        item_template.symbol = ')';
+                    else if (s == "RANGED")
+                        item_template.symbol = '}';
+                    else if (s == "ARMOR")
+                        item_template.symbol = '[';
+                    else if (s == "HELMET")
+                        item_template.symbol = ']';
+                    else if (s == "CLOAK")
+                        item_template.symbol = '(';
+                    else if (s == "GLOVES")
+                        item_template.symbol = '{';
+                    else if (s == "BOOTS")
+                        item_template.symbol = '\\';
+                    else if (s == "RING")
+                        item_template.symbol = '=';
+                    else if (s == "AMULET")
+                        item_template.symbol = '"';
+                    else if (s == "LIGHT")
+                        item_template.symbol = '_';
+                    else if (s == "SCROLL")
+                        item_template.symbol = '~';
+                    else if (s == "BOOK")
+                        item_template.symbol = '?';
+                    else if (s == "FLASK")
+                        item_template.symbol = '!';
+                    else if (s == "GOLD")
+                        item_template.symbol = '$';
+                    else if (s == "AMMUNITION")
+                        item_template.symbol = '/';
+                    else if (s == "FOOD")
+                        item_template.symbol = ',';
+                    else if (s == "WAND")
+                        item_template.symbol = '-';
+                    else if (s == "CONTAINER")
+                        item_template.symbol = '%';
+                    else
+                        item_template.symbol = '*';
+                }
+                else if (s == "COLOR") {
+                    check |= 0x0004;
+                    item_template.color = 0x00;
+                    while (f.peek() != '\n') {
+                        f >> s;
+                        if (s == "BLACK")
+                            item_template.color |= 0x01;
+                        else if (s == "RED")
+                            item_template.color |= 0x02;
+                        else if (s == "GREEN")
+                            item_template.color |= 0x04;
+                        else if (s == "YELLOW")
+                            item_template.color |= 0x08;
+                        else if (s == "BLUE")
+                            item_template.color |= 0x10;
+                        else if (s == "MAGENTA")
+                            item_template.color |= 0x20;
+                        else if (s == "CYAN")
+                            item_template.color |= 0x40;
+                        else if (s == "WHITE")
+                            item_template.color |= 0x80;
+                        else
+                            return 2;
+                    }
+                }
+                else if (s == "DESC") {
+                    check |= 0x0008;
+                    std::vector<std::string> des;
+                    for (j = 0; s != "."; j++) {
+                        getline(f, s);
+                        des.push_back(std::string(s));
+                    }
+                    item_template.description = des;
+                }
+                else if (s == "SPEED") {
+                    check |= 0x0010;
+                    f >> s;
+                    i = 0;
+                    item_template.speed_bonus.base = 0;
+                    item_template.speed_bonus.num = 0;
+                    item_template.speed_bonus.sides = 0;
+                    while (s[i] != '+') {
+                        item_template.speed_bonus.base *= 10;
+                        item_template.speed_bonus.base += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != 'd') {
+                        item_template.speed_bonus.num *= 10;
+                        item_template.speed_bonus.num += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != '\0') {
+                        item_template.speed_bonus.sides *= 10;
+                        item_template.speed_bonus.sides += s[i++] - '0';
+                    }
+                }
+                else if (s == "ATTR") {
+                    check |= 0x0020;
+                    f >> s;
+                    i = 0;
+                    item_template.attributes.base = 0;
+                    item_template.attributes.num = 0;
+                    item_template.attributes.sides = 0;
+                    while (s[i] != '+') {
+                        item_template.attributes.base *= 10;
+                        item_template.attributes.base += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != 'd') {
+                        item_template.attributes.num *= 10;
+                        item_template.attributes.num += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != '\0') {
+                        item_template.attributes.sides *= 10;
+                        item_template.attributes.sides += s[i++] - '0';
+                    }
+                }
+                else if (s == "ART") {
+                    check |= 0x0040;
+                    item_template.data = 0x00;
+                    while (f.peek() != '\n') {
+                        f >> s;
+                        if (s == "TRUE")
+                            item_template.data |= RELIC;
+                        else if (s == "FALSE")
+                            item_template.data &= ~RELIC;
+                        else
+                            return 3;
+                    }
+                }
+                else if (s == "HIT") {
+                    check |= 0x0080;
+                    f >> s;
+                    i = 0;
+                    item_template.hitpoint_bonus.base = 0;
+                    item_template.hitpoint_bonus.num = 0;
+                    item_template.hitpoint_bonus.sides = 0;
+                    while (s[i] != '+') {
+                        item_template.hitpoint_bonus.base *= 10;
+                        item_template.hitpoint_bonus.base += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != 'd') {
+                        item_template.hitpoint_bonus.num *= 10;
+                        item_template.hitpoint_bonus.num += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != '\0') {
+                        item_template.hitpoint_bonus.sides *= 10;
+                        item_template.hitpoint_bonus.sides += s[i++] - '0';
+                    }
+                }
+                else if (s == "DAM") {
+                    check |= 0x0100;
+                    f >> s;
+                    i = 0;
+                    item_template.damage_bonus.base = 0;
+                    item_template.damage_bonus.num = 0;
+                    item_template.damage_bonus.sides = 0;
+                    while (s[i] != '+') {
+                        item_template.damage_bonus.base *= 10;
+                        item_template.damage_bonus.base += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != 'd') {
+                        item_template.damage_bonus.num *= 10;
+                        item_template.damage_bonus.num += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != '\0') {
+                        item_template.damage_bonus.sides *= 10;
+                        item_template.damage_bonus.sides += s[i++] - '0';
+                    }
+                }
+                else if (s == "DODGE") {
+                    check |= 0x0200;
+                    f >> s;
+                    i = 0;
+                    item_template.dodge_bonus.base = 0;
+                    item_template.dodge_bonus.num = 0;
+                    item_template.dodge_bonus.sides = 0;
+                    while (s[i] != '+') {
+                        item_template.dodge_bonus.base *= 10;
+                        item_template.dodge_bonus.base += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != 'd') {
+                        item_template.dodge_bonus.num *= 10;
+                        item_template.dodge_bonus.num += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != '\0') {
+                        item_template.dodge_bonus.sides *= 10;
+                        item_template.dodge_bonus.sides += s[i++] - '0';
+                    }
+                }
+                else if (s == "DEF") {
+                    check |= 0x0400;
+                    f >> s;
+                    i = 0;
+                    item_template.defence_bonus.base = 0;
+                    item_template.defence_bonus.num = 0;
+                    item_template.defence_bonus.sides = 0;
+                    while (s[i] != '+') {
+                        item_template.defence_bonus.base *= 10;
+                        item_template.defence_bonus.base += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != 'd') {
+                        item_template.defence_bonus.num *= 10;
+                        item_template.defence_bonus.num += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != '\0') {
+                        item_template.defence_bonus.sides *= 10;
+                        item_template.defence_bonus.sides += s[i++] - '0';
+                    }
+                }
+                else if (s == "WEIGHT") {
+                    check |= 0x0800;
+                    f >> s;
+                    i = 0;
+                    item_template.weight.base = 0;
+                    item_template.weight.num = 0;
+                    item_template.weight.sides = 0;
+                    while (s[i] != '+') {
+                        item_template.weight.base *= 10;
+                        item_template.weight.base += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != 'd') {
+                        item_template.weight.num *= 10;
+                        item_template.weight.num += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != '\0') {
+                        item_template.weight.sides *= 10;
+                        item_template.weight.sides += s[i++] - '0';
+                    }
+                }
+                else if (s == "VAL") {
+                    check |= 0x1000;
+                    f >> s;
+                    i = 0;
+                    item_template.value.base = 0;
+                    item_template.value.num = 0;
+                    item_template.value.sides = 0;
+                    while (s[i] != '+') {
+                        item_template.value.base *= 10;
+                        item_template.value.base += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != 'd') {
+                        item_template.value.num *= 10;
+                        item_template.value.num += s[i++] - '0';
+                    }
+                    i++;
+                    while (s[i] != '\0') {
+                        item_template.value.sides *= 10;
+                        item_template.value.sides += s[i++] - '0';
+                    }
+                }
+                else if (s == "RRTY") {
+                    check |= 0x2000;
+                    f >> s;
+                    i = 0;
+                    item_template.rarity = 0;
+                    while (s[i] != '\0') {
+                        item_template.rarity *= 10;
+                        item_template.rarity += s[i++] - '0';
+                    }
+                }
+                else if (s != "END") {
+                    std::cout << s << std::endl;
+                    return 4;
+                }
+            } while (s != "END");
+            if (check != 0x3FFF) {
+                std::cout << check << std::endl;
+                return 5;
             }
-            std::cout << std::endl;
+            (*item_dictionary).push_back(item_template);
         }
-        std::cout << "Speed: " << (*it).speed.base << " + " << (*it).speed.num << " d" << (*it).speed.sides << std::endl;
-        std::cout << "Abilities:";
-        if ((*it).abilities & SMART)
-            std::cout << " Smart";
-        if ((*it).abilities & TELE)
-            std::cout << " Telepathic";
-        if ((*it).abilities & TUNNEL)
-            std::cout << " Tunneling";
-        if ((*it).abilities & ERRATIC)
-            std::cout << " Erratic";
-        if ((*it).abilities & PASS)
-            std::cout << " Non-Corporial";
-        if ((*it).abilities & PICKUP)
-            std::cout << " Able To Pick Up Items";
-        if ((*it).abilities & DESTROY)
-            std::cout << " Destroys Items";
-        if ((*it).abilities & UNIQ)
-            std::cout << " Unique";
-        std::cout << std::endl;
-        std::cout << "HP: " << (*it).hitpoints.base << " + " << (*it).hitpoints.num << " d" << (*it).hitpoints.sides << std::endl;
-        std::cout << "Damage: " << (*it).damage.base << " + " << (*it).damage.num << " d" << (*it).damage.sides << std::endl;
-        std::cout << "Rarity: " << (int) (*it).rarity << std::endl;
-        std::cout << "End Monster" << std::endl;
-        std::cout << std::endl;
+    } while (!f.eof());
+    return 0;
+}
+
+void get_args(int argc, char *argv[], uint8_t *args, uint16_t *num_init_monsters)
+{
+    uint8_t i;
+    for (i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "--save")) {
+            *args |= SAVE;
+        }
+        else if (!strcmp(argv[i], "--load")) {
+            *args |= LOAD;
+        }
+        else if (!strcmp(argv[i], "--nummon")) {
+            *args |= NUM_MON;
+            sscanf(argv[++i], "%hd", num_init_monsters);
+        }
     }
+}
+
+void generate(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, entity_t **u_stairs, uint16_t *num_d_stairs, entity_t **d_stairs)
+{
+    uint16_t i, j;
+    uint8_t v;
+    *num_rooms = 6 + rand() % 2;
+    *rooms = (room_t *) malloc(sizeof(room_t) * *num_rooms);
+    do {
+        for (i = 0; i < *num_rooms; i++) {
+            (*rooms)[i].xsize = 4 + rand() % 10;
+            (*rooms)[i].ysize = 3 + rand() % 10;
+            (*rooms)[i].xpos = 1 + rand() % (W_WIDTH - (*rooms)[i].xsize - 2);
+            (*rooms)[i].ypos = 1 + rand() % (W_HEIGHT - (*rooms)[i].ysize - 2);
+        }
+        v = 1;
+        for (i = 1; i < *num_rooms && v; i++) {
+            for (j = 0; j < i && v; j++) {
+                if (!((*rooms)[i].xpos + (*rooms)[i].xsize < (*rooms)[j].xpos || (*rooms)[j].xpos + (*rooms)[j].xsize < (*rooms)[i].xpos)
+                        && !((*rooms)[i].ypos + (*rooms)[i].ysize < (*rooms)[j].ypos || (*rooms)[j].ypos + (*rooms)[j].ysize < (*rooms)[i].ypos)) {
+                    v = 0;
+                }
+            }
+        }
+    } while(!v);
+    *player = (character_t *) malloc(sizeof(character_t));
+    i = rand() % *num_rooms;
+    (*player)->xpos = (*rooms)[i].xpos + rand() % (*rooms)[i].xsize;
+    (*player)->ypos = (*rooms)[i].ypos + rand() % (*rooms)[i].ysize;
+    (*player)->symbol = '@';
+    *num_u_stairs = 1;
+    *u_stairs = (entity_t *) malloc(sizeof(character_t));
+    (*u_stairs)->xpos = (*rooms)[2].xpos + 1;
+    (*u_stairs)->ypos = (*rooms)[2].ypos + 1;
+    (*u_stairs)->symbol = '<';
+    *num_d_stairs = 1;
+    *d_stairs = (entity_t *) malloc(sizeof(character_t));
+    (*d_stairs)->xpos = (*rooms)[*num_rooms - 1].xpos + 1;
+    (*d_stairs)->ypos = (*rooms)[*num_rooms - 1].ypos + 1;
+    (*d_stairs)->symbol = '>';
+    for (i = 0; i < W_HEIGHT; i++) {
+        for (j = 0; j < W_WIDTH; j++) {
+            hardness[i][j] = 0x80;
+        }
+    }
+    for (i = 0; i < W_HEIGHT; i++) {
+        hardness[i][0] = 0xFF;
+        hardness[i][W_WIDTH-1] = 0xFF;
+    }
+    for (j = 0; j < W_WIDTH; j++) {
+        hardness[0][j] = 0xFF;
+        hardness[W_HEIGHT-1][j] = 0xFF;
+    }
+    for (i = 1; i < *num_rooms; i++) {
+        for (j = (*rooms)[i-1].ypos + (*rooms)[i-1].ysize / 2; j <= (*rooms)[i].ypos + (*rooms)[i].ysize / 2; j++) {
+            hardness[j][(*rooms)[i-1].xpos + (*rooms)[i-1].xsize / 2] = 0;
+        }
+        for (j = (*rooms)[i-1].ypos + (*rooms)[i-1].ysize / 2; j >= (*rooms)[i].ypos + (*rooms)[i].ysize / 2; j--) {
+            hardness[j][(*rooms)[i-1].xpos + (*rooms)[i-1].xsize / 2] = 0;
+        }
+        for (j = (*rooms)[i-1].xpos + (*rooms)[i-1].xsize / 2; j <= (*rooms)[i].xpos + (*rooms)[i].xsize / 2; j++) {
+            hardness[(*rooms)[i].ypos + (*rooms)[i].ysize / 2][j] = 0;
+        }
+        for (j = (*rooms)[i-1].xpos + (*rooms)[i-1].xsize / 2; j >= (*rooms)[i].xpos + (*rooms)[i].xsize / 2; j--) {
+            hardness[(*rooms)[i].ypos + (*rooms)[i].ysize / 2][j] = 0;
+        }
+    }
+}
+
+void save(character_t *player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms, uint16_t num_u_stairs, entity_t *u_stairs, uint16_t num_d_stairs, entity_t *d_stairs)
+{
+    uint16_t i;
+    uint8_t j;
+    uint8_t w_byte;
+    uint16_t w_short;
+    uint32_t w;
+    char version[13] = "RLG327-@2021";
+    char *home = getenv("HOME");
+    const char *gamedir = ".rlg327";
+    const char *save = "dungeon";
+    char *path = (char *) malloc(strlen(home) + strlen(gamedir) + strlen(save) + 3);
+    sprintf(path, "%s/%s/%s", home, gamedir, save);
+    FILE *f = fopen(path, "w");
+    for (i = 0; i < 12; i++) {
+        fwrite(&version[i], sizeof(char), 1, f);
+    }
+    w = htobe32(0);
+    fwrite(&w, sizeof(uint32_t), 1, f);
+    w = htobe32(1708 + num_rooms * 4 + num_u_stairs * 2 + num_d_stairs * 2);
+    fwrite(&w, sizeof(uint32_t), 1, f);
+    w_byte = player->xpos;
+    fwrite(&w_byte, sizeof(uint8_t), 1, f);
+    w_byte = player->ypos;
+    fwrite(&w_byte, sizeof(uint8_t), 1, f);
+    for (i = 0; i < W_HEIGHT; i++) {
+        for (j = 0; j < W_WIDTH; j++) {
+            w_byte = hardness[i][j];
+            fwrite(&w_byte, sizeof(uint8_t), 1, f);
+        }
+    }
+    w_short = htobe16(num_rooms);
+    fwrite(&w_short, sizeof(uint16_t), 1, f);
+    for (i = 0; i < num_rooms; i++) {
+        w_byte = rooms[i].xpos;
+        fwrite(&w_byte, sizeof(uint8_t), 1, f);
+        w_byte = rooms[i].ypos;
+        fwrite(&w_byte, sizeof(uint8_t), 1, f);
+        w_byte = rooms[i].xsize;
+        fwrite(&w_byte, sizeof(uint8_t), 1, f);
+        w_byte = rooms[i].ysize;
+        fwrite(&w_byte, sizeof(uint8_t), 1, f);
+    }
+    w_short = htobe16(num_u_stairs);
+    fwrite(&w_short, sizeof(uint16_t), 1, f);
+    for (i = 0; i < num_u_stairs; i++) {
+        w_byte = u_stairs[i].xpos;
+        fwrite(&w_byte, sizeof(uint8_t), 1, f);
+        w_byte = u_stairs[i].ypos;
+        fwrite(&w_byte, sizeof(uint8_t), 1, f);
+    }
+    w_short = htobe16(num_d_stairs);
+    fwrite(&w_short, sizeof(uint16_t), 1, f);
+    for (i = 0; i < num_d_stairs; i++) {
+        w_byte = d_stairs[i].xpos;
+        fwrite(&w_byte, sizeof(uint8_t), 1, f);
+        w_byte = d_stairs[i].ypos;
+        fwrite(&w_byte, sizeof(uint8_t), 1, f);
+    }
+    fclose(f);
+    free(path);
+}
+
+void load(character_t **player, uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t *num_rooms, room_t **rooms, uint16_t *num_u_stairs, entity_t **u_stairs, uint16_t *num_d_stairs, entity_t **d_stairs)
+{
+    uint16_t i;
+    uint8_t j;
+    uint16_t count = 0;
+    uint8_t r_byte;
+    uint16_t r_short;
+    uint32_t r;
+    char version[13];
+    version[12] = '\0';
+    char *home = getenv("HOME");
+    const char *gamedir = ".rlg327";
+    const char *save = "dungeon";
+    char *path = (char *) malloc(strlen(home) + strlen(gamedir) + strlen(save) + 3);
+    sprintf(path, "%s/%s/%s", home, gamedir, save);
+    FILE *f = fopen(path, "r");
+    fread(version, sizeof(char), 12, f);
+    fread(&r, sizeof(uint32_t), 1, f);
+    fread(&r, sizeof(uint32_t), 1, f);
+    *player = (character_t *) malloc(sizeof(character_t));
+    fread(&r_byte, sizeof(uint8_t), 1, f);
+    (*player)->xpos = r_byte;
+    fread(&r_byte, sizeof(uint8_t), 1, f);
+    (*player)->ypos = r_byte;
+    (*player)->symbol = '@';
+    for (i = 0; i < W_HEIGHT; i++) {
+        for (j = 0; j < W_WIDTH; j++) {
+            fread(&r_byte, sizeof(uint8_t), 1, f);
+            hardness[i][j] = r_byte;
+            count++;
+        }
+    }
+    fread(&r_short, sizeof(uint16_t), 1, f);
+    *num_rooms = be16toh(r_short);
+    *rooms = (room_t *) malloc(sizeof(room_t) * *num_rooms);
+    for (i = 0; i < *num_rooms; i++) {
+        fread(&r_byte, sizeof(uint8_t), 1, f);
+        (*rooms)[i].xpos = r_byte;
+        fread(&r_byte, sizeof(uint8_t), 1, f);
+        (*rooms)[i].ypos = r_byte;
+        fread(&r_byte, sizeof(uint8_t), 1, f);
+        (*rooms)[i].xsize = r_byte;
+        fread(&r_byte, sizeof(uint8_t), 1, f);
+        (*rooms)[i].ysize = r_byte;
+    }
+    fread(&r_short, sizeof(uint16_t), 1, f);
+    *num_u_stairs = be16toh(r_short);
+    *u_stairs = (entity_t *) malloc(sizeof(character_t) * *num_u_stairs);
+    for (i = 0; i < *num_u_stairs; i++) {
+        fread(&r_byte, sizeof(uint8_t), 1, f);
+        (*u_stairs)[i].xpos = r_byte;
+        fread(&r_byte, sizeof(uint8_t), 1, f);
+        (*u_stairs)[i].ypos = r_byte;
+        (*u_stairs)[i].symbol = '<';
+    }
+    fread(&r_short, sizeof(uint16_t), 1, f);
+    *num_d_stairs = be16toh(r_short);
+    *d_stairs = (entity_t *) malloc(sizeof(character_t) * *num_d_stairs);
+    for (i = 0; i < *num_d_stairs; i++) {
+        fread(&r_byte, sizeof(uint8_t), 1, f);
+        (*d_stairs)[i].xpos = r_byte;
+        fread(&r_byte, sizeof(uint8_t), 1, f);
+        (*d_stairs)[i].ypos = r_byte;
+        (*d_stairs)[i].symbol = '>';
+    }
+    fclose(f);
+    free(path);
 }
 
 void map_rooms(char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t num_rooms, room_t *rooms)
@@ -830,92 +1359,93 @@ void map_rooms(char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH],
     }
 }
 
-void init_ncurses()
-{
-    initscr();
-    raw();
-    noecho();
-    curs_set(0);
-    keypad(stdscr, TRUE);
-}
-
-void deinit_ncurses() {
-    endwin();
-}
-
-void init_map(char map[W_HEIGHT][W_WIDTH], char c)
-{
-    uint8_t i, j;
-    for (i = 0; i < W_HEIGHT; i++) {
-        for (j = 0; j < W_WIDTH; j++) {
-            map[i][j] = c;
-        }
-    }
-}
-
-void sketch_map(char display[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH])
-{
-    uint8_t i, j;
-    for (i = 0; i < W_HEIGHT; i++) {
-        for (j = 0; j < W_WIDTH; j++) {
-            display[i][j] = map[i][j];
-        }
-    }
-}
-
-void init_character_map(character_t *character_map[W_HEIGHT][W_WIDTH])
-{
-    uint8_t i, j;
-    for (i = 0; i < W_HEIGHT; i++) {
-        for (j = 0; j < W_WIDTH; j++) {
-            character_map[i][j] = NULL;
-        }
-    }
-}
-
 void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player)
 {
     player->sequence = 0;
-    player->characteristics = 0x0000;
-    player->characteristics |= ALIVE;
-    player->characteristics |= FOG;
+    player->data = 0x0000;
+    player->data |= ALIVE;
+    player->data |= FOG;
     player->speed = 10;
     heap_add(characters, player, 0);
     character_map[player->ypos][player->xpos] = player;
 }
 
-void generate_monsters(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], room_t *rooms, uint16_t num_rooms, uint16_t num_init_monsters)
+void generate_monsters( std::vector<monster_template_t> monster_dictionary, heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], uint16_t num_init_monsters)
 {
-    uint16_t i, j;
-    character_t *monster;
+    uint16_t i;
+    uint32_t rarity_index, rarity_base;
+    monster_t *monster;
+    std::vector<monster_template_t>::iterator it;
+    rarity_base = 0;
+    for (it = monster_dictionary.begin(); it != monster_dictionary.end(); it++) {
+        rarity_base += (*it).rarity;
+    }
     for (i = 1; i <= num_init_monsters; i++) {
-        monster = (character_t *) malloc(sizeof(character_t));
+        monster = (monster_t *) malloc(sizeof(monster_t));
         do {
-            monster->characteristics = 0x00;
-            monster->characteristics |= rand() % 2 ? SMART : 0x00;
-            monster->characteristics |= rand() % 2 ? TELE : 0x00;
-            monster->characteristics |= rand() % 2 ? TUNNEL : 0x00;
-            monster->characteristics |= rand() % 2 ? ERRATIC : 0x00;
-            monster->symbol = monster->characteristics < 10 ? '0' + monster->characteristics : monster->characteristics - 10 + 'a';
-            monster->characteristics |= ALIVE;
-            monster->characteristics &= ~KNOWN;
-            monster->characteristics &= ~SEE;
-            monster->known_location.xpos = 0;
-            monster->known_location.ypos = 0;
-            monster->sequence = i;
-            monster->speed = 5 + rand() % 16;
-            if (monster->characteristics & TUNNEL) {
+            rarity_index = rand() % rarity_base;
+            for (it = monster_dictionary.begin(); (*it).rarity < rarity_index && it != monster_dictionary.end(); it++) {
+                rarity_index -= (*it).rarity;
+            }
+        } while ((*it).abilities & UNIQ && (*it).abilities & MONSTER_EXISTS);
+        (*it).abilities |= MONSTER_EXISTS;
+        monster->symbol = (*it).symbol;
+        monster->data = (*it).abilities;
+        monster->data |= ALIVE;
+        monster->data &= ~KNOWN;
+        monster->data &= ~SEE;
+        monster->sequence = i;
+        monster->speed = (*it).speed.toss();
+        monster->entry = &(*it);
+        monster->hitpoints = (*it).hitpoints.toss();
+        monster->known_location.xpos = 0;
+        monster->known_location.ypos = 0;
+        monster->xpos = 1 + rand() % (W_WIDTH - 2);
+        monster->ypos = 1 + rand() % (W_HEIGHT - 2);
+        if (!(monster->data & TUNNEL)) {
+            while (map[monster->ypos][monster->xpos] == ' ' || character_map[W_HEIGHT][W_WIDTH] != NULL) {
                 monster->xpos = 1 + rand() % (W_WIDTH - 2);
                 monster->ypos = 1 + rand() % (W_HEIGHT - 2);
             }
-            else {
-                j = rand() % num_rooms;
-                monster->xpos = rooms[j].xpos + rand() % rooms[j].xsize;
-                monster->ypos = rooms[j].ypos + rand() % rooms[j].ysize;
-            }
-        } while (character_map[monster->ypos][monster->xpos] != NULL || (!(monster->characteristics & TUNNEL) && (map[monster->ypos][monster->xpos] == ' ')));
+        }
         heap_add(characters, monster, 0);
         character_map[monster->ypos][monster->xpos] = monster;
+    }
+}
+
+void generate_items(std::vector<item_template_t> item_dictionary, item_t *item_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], uint16_t num_init_items)
+{
+    uint16_t i;
+    uint32_t rarity_index, rarity_base;
+    item_t *item;
+    std::vector<item_template_t>::iterator it;
+    rarity_base = 0;
+    for (it = item_dictionary.begin(); it != item_dictionary.end(); it++) {
+        rarity_base += (*it).rarity;
+    }
+    for (i = 1; i <= num_init_items; i++) {
+        item = (item_t *) malloc(sizeof(item_t));
+        do {
+            rarity_index = rand() % rarity_base;
+            for (it = item_dictionary.begin(); (*it).rarity < rarity_index && it != item_dictionary.end(); it++) {
+                rarity_index -= (*it).rarity;
+            }
+        } while ((*it).data & RELIC && (*it).data & ITEM_EXISTS);
+        (*it).data |= ITEM_EXISTS;
+        item->symbol = (*it).symbol;
+        item->entry = &(*it);
+        item->speed_bonus = (*it).speed_bonus.toss();
+        item->attributes = (*it).attributes.toss();
+        item->hitpoint_bonus = (*it).hitpoint_bonus.toss();
+        item->dodge_bonus = (*it).dodge_bonus.toss();
+        item->defence_bonus = (*it).defence_bonus.toss();
+        item->weight = (*it).weight.toss();
+        item->value = (*it).value.toss();
+        do {
+            item->xpos = 1 + rand() % (W_WIDTH - 2);
+            item->ypos = 1 + rand() % (W_HEIGHT - 2);
+        } while (map[item->ypos][item->xpos] == ' ');
+        item_map[item->ypos][item->xpos] = item;
     }
 }
 
@@ -1055,7 +1585,7 @@ void derive_move_stack(stack_t *move_stack, char map[W_HEIGHT][W_WIDTH], uint8_t
     stack_init(move_stack);
     hither->xpos = character->xpos;
     hither->ypos = character->ypos;
-    get_neighbors(move_stack, hither, map, hardness, character->characteristics & TUNNEL);
+    get_neighbors(move_stack, hither, map, hardness, character->data & TUNNEL);
     *thither = (vertex_t *) malloc(sizeof(vertex_t));
     (*thither)->xpos = hither->xpos;
     (*thither)->ypos = hither->ypos;
@@ -1067,10 +1597,10 @@ void player_command(character_t *player, vertex_t *thither, const char visible_m
     int cmd;
     thither->xpos = player->xpos;
     thither->ypos = player->ypos;
-    player->characteristics &= ~(WALK_UP & WALK_DOWN);
+    player->data &= ~(WALK_UP & WALK_DOWN);
     do {
         cmd = getch();
-        player->characteristics &= ~RESET;
+        player->data &= ~RESET;
         switch (cmd) {
             case '7':
             case 'y':
@@ -1109,54 +1639,54 @@ void player_command(character_t *player, vertex_t *thither, const char visible_m
                 thither->xpos -= 1;
                 break;
             case '>':
-                player->characteristics |= WALK_DOWN;
+                player->data |= WALK_DOWN;
                 break;
             case '<':
-                player->characteristics |= WALK_UP;
+                player->data |= WALK_UP;
                 break;
             case '5':
             case ' ':
                 break;
             case 'm':
-                player->characteristics |= MON_LIST;
+                player->data |= MON_LIST;
                 break;
             case 'f':
-                if (player->characteristics & FOG) {
-                    player->characteristics &= ~FOG;
+                if (player->data & FOG) {
+                    player->data &= ~FOG;
                     draw(display);
                 }
                 else {
-                    player->characteristics |= FOG;
+                    player->data |= FOG;
                     draw(visible_map);
                 }
                 refresh();
-                player->characteristics |= RESET;
+                player->data |= RESET;
                 break;
             case 'g':
-                player->characteristics |= TELEPORT;
+                player->data |= TELEPORT;
                 break;
             case 'Q':
-                player->characteristics |= QUIT;
+                player->data |= QUIT;
                 break;
             default:
-                player->characteristics |= RESET;
+                player->data |= RESET;
                 break;
         }
-    } while (player->characteristics & RESET);
-    player->characteristics &= ~RESET;
+    } while (player->data & RESET);
+    player->data &= ~RESET;
 }
 
-void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t floor_distance[W_HEIGHT][W_WIDTH], uint16_t tunnel_distance[W_HEIGHT][W_WIDTH], vertex_t *hither, vertex_t **thither, uint16_t *num_monsters)
+void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WIDTH], monster_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t floor_distance[W_HEIGHT][W_WIDTH], uint16_t tunnel_distance[W_HEIGHT][W_WIDTH], vertex_t *hither, vertex_t **thither, uint16_t *num_monsters)
 {
     uint16_t custom_distance[W_HEIGHT][W_WIDTH];
     character_t ghost_player;
-    if (character->characteristics & ERRATIC && rand() % 2)
+    if (character->data & ERRATIC && rand() % 2)
         random_move(move_stack, thither);
     else {
         line_of_sight(character, player, map);
-        if (character->characteristics & TELE || character->characteristics & SEE) {
-            if (character->characteristics & SMART) {
-                if (character->characteristics & TUNNEL)
+        if (character->data & TELE || character->data & SEE) {
+            if (character->data & SMART) {
+                if (character->data & TUNNEL)
                     smart_move(move_stack, character, thither, tunnel_distance);
                 else
                     smart_move(move_stack, character, thither, floor_distance);
@@ -1166,10 +1696,10 @@ void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WI
             }
         }
         else {
-            if (character->characteristics & KNOWN) {
+            if (character->data & KNOWN) {
                 ghost_player.xpos = character->known_location.xpos;
                 ghost_player.ypos = character->known_location.ypos;
-                dijkstra(hardness, map, &ghost_player, custom_distance, character->characteristics & TUNNEL);
+                dijkstra(hardness, map, &ghost_player, custom_distance, character->data & TUNNEL);
                 smart_move(move_stack, character, thither, custom_distance);
             }
             else {
@@ -1177,7 +1707,7 @@ void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WI
             }
         }
     }
-    if (map[(*thither)->ypos][(*thither)->xpos] == ' ' && character->characteristics & TUNNEL) {
+    if (map[(*thither)->ypos][(*thither)->xpos] == ' ' && character->data & TUNNEL) {
         tunnel(hardness, player, floor_distance, tunnel_distance, map, *thither);
     }
     if (map[(*thither)->ypos][(*thither)->xpos] != ' ') {
@@ -1185,22 +1715,22 @@ void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WI
     }
 }
 
-void line_of_sight(character_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH])
+void line_of_sight(monster_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH])
 {
     int i;
     double slope;
-    character->characteristics |= SEE;
+    character->data |= SEE;
     if (player->xpos - character->xpos) {
         slope = (player->ypos - character->ypos) / (player->xpos - (double) character->xpos);
         if (!(slope > 1.0 || slope < -1.0)) {
             for (i = 0; i <= (int) (player->xpos) - (int) (character->xpos); i++) {
                 if (map[character->ypos + (int) (slope * i)][character->xpos + i] == ' ') {
-                    character->characteristics &= ~SEE;
+                    character->data &= ~SEE;
                 }
             }
             for (i = 0; i <= (int) (character->xpos) - (int) (player->xpos); i++) {
                 if (map[player->ypos + (int) (slope * i)][player->xpos + i] == ' ') {
-                    character->characteristics &= ~SEE;
+                    character->data &= ~SEE;
                 }
             }
         }
@@ -1210,18 +1740,18 @@ void line_of_sight(character_t *character, character_t *player, char map[W_HEIGH
         if (!(slope > 1.0 || slope < -1.0)) {
             for (i = 0; i <= (int) (player->ypos) - (int) (character->ypos); i++) {
                 if (map[character->ypos + i][character->xpos + (int) (slope * i)] == ' ') {
-                    character->characteristics &= ~SEE;
+                    character->data &= ~SEE;
                 }
             }
             for (i = 0; i <= (int) (character->ypos) - (int) (player->ypos); i++) {
                 if (map[player->ypos + i][player->xpos + (int) (slope * i)] == ' ') {
-                    character->characteristics &= ~SEE;
+                    character->data &= ~SEE;
                 }
             }
         }
     }
-    if (character->characteristics & SMART && character->characteristics & SEE) {
-        character->characteristics |= KNOWN;
+    if (character->data & SMART && character->data & SEE) {
+        character->data |= KNOWN;
         character->known_location.xpos = player->xpos;
         character->known_location.ypos = player->ypos;
     }
@@ -1291,7 +1821,7 @@ void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *
 {
     /* [COMBAT] */
     if (character_map[thither->ypos][thither->xpos] != NULL && character_map[thither->ypos][thither->xpos] != character) {
-        character_map[thither->ypos][thither->xpos]->characteristics &= ~ALIVE;
+        character_map[thither->ypos][thither->xpos]->data &= ~ALIVE;
         if (character_map[thither->ypos][thither->xpos]->symbol != '@')
             *num_monsters -= 1;
     }
@@ -1304,13 +1834,13 @@ void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *
 void teleport_command(character_t *player, vertex_t *thither, char display[W_HEIGHT][W_WIDTH])
 {
     int cmd;
-    player->characteristics &= ~ESCAPE;
+    player->data &= ~ESCAPE;
     do {
         draw(display);
         mvprintw(thither->ypos + 1, thither->xpos, "*");
         refresh();
         cmd = getch();
-        player->characteristics &= ~RESET;
+        player->data &= ~RESET;
         switch(cmd) {
             case '7':
             case 'y':
@@ -1318,13 +1848,13 @@ void teleport_command(character_t *player, vertex_t *thither, char display[W_HEI
                     thither->xpos -= 1;
                 if (thither->xpos > 1)
                     thither->ypos -= 1;
-                player->characteristics |= RESET;
+                player->data |= RESET;
                 break;
             case '8':
             case 'k':
                 if (thither->ypos > 1)
                     thither->ypos -= 1;
-                player->characteristics |= RESET;
+                player->data |= RESET;
                 break;
             case '9':
             case 'u':
@@ -1332,13 +1862,13 @@ void teleport_command(character_t *player, vertex_t *thither, char display[W_HEI
                     thither->xpos += 1;
                 if (thither->ypos > 1)
                     thither->ypos -= 1;
-                player->characteristics |= RESET;
+                player->data |= RESET;
                 break;
             case '6':
             case 'l':
                 if (thither->xpos < W_WIDTH - 2)
                     thither->xpos += 1;
-                player->characteristics |= RESET;
+                player->data |= RESET;
                 break;
             case '3':
             case 'n':
@@ -1346,13 +1876,13 @@ void teleport_command(character_t *player, vertex_t *thither, char display[W_HEI
                     thither->xpos += 1;
                 if (thither->ypos < W_HEIGHT - 2)
                     thither->ypos += 1;
-                player->characteristics |= RESET;
+                player->data |= RESET;
                 break;
             case '2':
             case 'j':
                 if (thither->ypos > 1)
                     thither->ypos += 1;
-                player->characteristics |= RESET;
+                player->data |= RESET;
                 break;
             case '1':
             case 'b':
@@ -1360,27 +1890,27 @@ void teleport_command(character_t *player, vertex_t *thither, char display[W_HEI
                     thither->xpos -= 1;
                 if (thither->ypos < W_HEIGHT - 2)
                     thither->ypos += 1;
-                player->characteristics |= RESET;
+                player->data |= RESET;
                 break;
             case '4':
             case 'h':
                 if (thither->xpos > 1)
                     thither->xpos -= 1;
-                player->characteristics |= RESET;
+                player->data |= RESET;
                 break;
             case 'g':
                 break;
             /* ESCAPE */
             case 27:
-                player->characteristics |= ESCAPE;
+                player->data |= ESCAPE;
                 break;
             case 'Q':
-                player->characteristics |= QUIT;
+                player->data |= QUIT;
                 break;
             default:
-                player->characteristics |= RESET;
+                player->data |= RESET;
         }
-    } while (player->characteristics & RESET);
+    } while (player->data & RESET);
 }
 
 void monster_list(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player, uint16_t num_init_monsters)
@@ -1412,44 +1942,52 @@ void monster_list(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *pl
         }
         refresh();
         monster_list_command(player);
-        if (player->characteristics & WALK_UP) {
+        if (player->data & WALK_UP) {
             k -= 0 < k ? 1 : 0;
         }
-        if (player->characteristics & WALK_DOWN) {
+        if (player->data & WALK_DOWN) {
             k += k + 15 < num_init_monsters ? 1 : 0;
         }
-        player->characteristics &= ~(WALK_UP | WALK_DOWN);
-    } while (!(player->characteristics & ESCAPE) && !(player->characteristics & QUIT));
+        player->data &= ~(WALK_UP | WALK_DOWN);
+    } while (!(player->data & ESCAPE) && !(player->data & QUIT));
     free(monster_list);
 }
 
 void monster_list_command(character_t *player)
 {
     int cmd;
-    player->characteristics &= ~(WALK_UP & WALK_DOWN);
-    player->characteristics &= ~ESCAPE;
+    player->data &= ~(WALK_UP & WALK_DOWN);
+    player->data &= ~ESCAPE;
     do {
         cmd = getch();
-        player->characteristics &= ~RESET;
+        player->data &= ~RESET;
         switch (cmd) {
             case KEY_UP:
-                player->characteristics |= WALK_UP;
+                player->data |= WALK_UP;
                 break;
             case KEY_DOWN:
-                player->characteristics |= WALK_DOWN;
+                player->data |= WALK_DOWN;
                 break;
             /* ESCAPE */
             case 27:
-                player->characteristics |= ESCAPE;
+                player->data |= ESCAPE;
                 break;
             case 'Q':
-                player->characteristics |= QUIT;
+                player->data |= QUIT;
                 break;
             default:
-                player->characteristics |= RESET;
+                player->data |= RESET;
                 break;
         }
-    } while (player->characteristics & RESET);
+    } while (player->data & RESET);
+}
+
+void place(char display[W_HEIGHT][W_WIDTH], entity_t *entities, uint16_t count)
+{
+    uint16_t i;
+    for (i = 0; i < count; i++) {
+        display[entities[i].ypos][entities[i].xpos] = entities[i].symbol;
+    }
 }
 
 void place_characters(char display[W_HEIGHT][W_WIDTH], character_t *characters[W_HEIGHT][W_WIDTH])
@@ -1483,11 +2021,147 @@ void sketch_visible_map(char visible_map[W_HEIGHT][W_WIDTH], const char map[W_HE
     }
 }
 
-void place(char display[W_HEIGHT][W_WIDTH], character_t *entities, uint16_t count)
+void print_monster_dictionary(std::vector<monster_template_t> monster_dictionary)
 {
-    uint16_t i;
-    for (i = 0; i < count; i++) {
-        display[entities[i].ypos][entities[i].xpos] = entities[i].symbol;
+    int i, j;
+    std::vector<monster_template_t>::iterator it;
+    for (it = monster_dictionary.begin(); it != monster_dictionary.end(); it++) {
+        std::cout << "Begin Monster:" << std::endl;
+        std::cout << "Name: " << (*it).name << std::endl;
+        std::cout << "Symbol: " << (*it).symbol << std::endl;
+        std::cout << "Color:";
+        if ((*it).color & 0x01)
+            std::cout << " Black";
+        if ((*it).color & 0x02)
+            std::cout << " Red";
+        if ((*it).color & 0x04)
+            std::cout << " Green";
+        if ((*it).color & 0x08)
+            std::cout << " Yellow";
+        if ((*it).color & 0x10)
+            std::cout << " Blue";
+        if ((*it).color & 0x20)
+            std::cout << " Magenta";
+        if ((*it).color & 0x40)
+            std::cout << " Cyan";
+        if ((*it).color & 0x80)
+            std::cout << " White";
+        std::cout << std::endl;
+        std::cout << "Description:"; 
+        for (j = 0; !((*it).description[j*78] == '.' && (*it).description[j*78+1] == '\0'); j++) {
+            for (i = 0; (*it).description[j*78+i] != '\0'; i++) {
+                std::cout << (char) (*it).description[j*78+i];
+            }
+            std::cout << std::endl;
+        }
+        std::cout << "Speed: " << (*it).speed.base << " + " << (*it).speed.num << " d" << (*it).speed.sides << std::endl;
+        std::cout << "Abilities:";
+        if ((*it).abilities & SMART)
+            std::cout << " Smart";
+        if ((*it).abilities & TELE)
+            std::cout << " Telepathic";
+        if ((*it).abilities & TUNNEL)
+            std::cout << " Tunneling";
+        if ((*it).abilities & ERRATIC)
+            std::cout << " Erratic";
+        if ((*it).abilities & PASS)
+            std::cout << " Non-Corporial";
+        if ((*it).abilities & PICKUP)
+            std::cout << " Able To Pick Up Items";
+        if ((*it).abilities & DESTROY)
+            std::cout << " Destroys Items";
+        if ((*it).abilities & UNIQ)
+            std::cout << " Unique";
+        std::cout << std::endl;
+        std::cout << "HP: " << (*it).hitpoints.base << " + " << (*it).hitpoints.num << " d" << (*it).hitpoints.sides << std::endl;
+        std::cout << "Damage: " << (*it).damage.base << " + " << (*it).damage.num << " d" << (*it).damage.sides << std::endl;
+        std::cout << "Rarity: " << (int) (*it).rarity << std::endl;
+        std::cout << "End Monster" << std::endl;
+        std::cout << std::endl;
+    }
+}
+
+void print_item_dictionary(std::vector<item_template_t> item_dictionary)
+{
+    int i;
+    std::vector<item_template_t>::iterator it;
+    for (it = item_dictionary.begin(); it != item_dictionary.end(); it++) {
+        std::cout << "Begin Item:" << std::endl;
+        std::cout << "Name: " << (*it).name << std::endl;
+        std::cout << "Type: " << (*it).symbol << std::endl;
+        if ((*it).symbol == '*')
+            std::cout << "Invalid" << std::endl;
+        else if ((*it).symbol == '|')
+            std::cout << "Weapon" << std::endl;
+        else if ((*it).symbol == ')')
+            std::cout << "Offhand" << std::endl;
+        else if ((*it).symbol == '}')
+            std::cout << "Ranged" << std::endl;
+        else if ((*it).symbol == '[')
+            std::cout << "Armor" << std::endl;
+        else if ((*it).symbol == ']')
+            std::cout << "Helmet" << std::endl;
+        else if ((*it).symbol == '(')
+            std::cout << "Cloak" << std::endl;
+        else if ((*it).symbol == '{')
+            std::cout << "Gloves" << std::endl;
+        else if ((*it).symbol == '\\')
+            std::cout << "Boots" << std::endl;
+        else if ((*it).symbol == '=')
+            std::cout << "Ring" << std::endl;
+        else if ((*it).symbol == '"')
+            std::cout << "Amulet" << std::endl;
+        else if ((*it).symbol == '_')
+            std::cout << "Light" << std::endl;
+        else if ((*it).symbol == '~')
+            std::cout << "Scroll" << std::endl;
+        else if ((*it).symbol == '?')
+            std::cout << "Book" << std::endl;
+        else if ((*it).symbol == '!')
+            std::cout << "Flask" << std::endl;
+        else if ((*it).symbol == '$')
+            std::cout << "Gold" << std::endl;
+        else if ((*it).symbol == '/')
+            std::cout << "Ammunition" << std::endl;
+        else if ((*it).symbol == ',')
+            std::cout << "Food" << std::endl;
+        else if ((*it).symbol == '-')
+            std::cout << "Wand" << std::endl;
+        else if ((*it).symbol == '%')
+            std::cout << "Container" << std::endl;
+        std::cout << "Color:";
+        if ((*it).color & 0x01)
+            std::cout << " Black";
+        if ((*it).color & 0x02)
+            std::cout << " Red";
+        if ((*it).color & 0x04)
+            std::cout << " Green";
+        if ((*it).color & 0x08)
+            std::cout << " Yellow";
+        if ((*it).color & 0x10)
+            std::cout << " Blue";
+        if ((*it).color & 0x20)
+            std::cout << " Magenta";
+        if ((*it).color & 0x40)
+            std::cout << " Cyan";
+        if ((*it).color & 0x80)
+            std::cout << " White";
+        std::cout << std::endl;
+        std::cout << "Description:"; 
+        for (i = 0; !((*it).description[i] == std::string(".")); i++) {
+            std::cout << (*it).description[i] << std::endl;
+        }
+        std::cout << "Speed: " << (*it).speed_bonus.base << " + " << (*it).speed_bonus.num << " d" << (*it).speed_bonus.sides << std::endl;
+        std::cout << "Attributes: " << (*it).attributes.base << " + " << (*it).attributes.num << " d" << (*it).attributes.sides << std::endl;
+        std::cout << "HP Bonus: " << (*it).hitpoint_bonus.base << " + " << (*it).hitpoint_bonus.num << " d" << (*it).hitpoint_bonus.sides << std::endl;
+        std::cout << "Damage Bonus: " << (*it).damage_bonus.base << " + " << (*it).damage_bonus.num << " d" << (*it).damage_bonus.sides << std::endl;
+        std::cout << "Dodge Bonus: " << (*it).dodge_bonus.base << " + " << (*it).dodge_bonus.num << " d" << (*it).dodge_bonus.sides << std::endl;
+        std::cout << "Defence Bonus: " << (*it).defence_bonus.base << " + " << (*it).defence_bonus.num << " d" << (*it).defence_bonus.sides << std::endl;
+        std::cout << "Weight: " << (*it).weight.base << " + " << (*it).weight.num << " d" << (*it).weight.sides << std::endl;
+        std::cout << "Value: " << (*it).value.base << " + " << (*it).value.num << " d" << (*it).value.sides << std::endl;
+        std::cout << "Rarity: " << (int) (*it).rarity << std::endl;
+        std::cout << "End Item" << std::endl;
+        std::cout << std::endl;
     }
 }
 
