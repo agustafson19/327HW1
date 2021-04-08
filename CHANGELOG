@@ -1,3 +1,57 @@
+commit 1d4f542ca43bc70b09defeabd10b545ef574a0f6
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Thu Apr 8 15:40:50 2021 -0500
+
+    Added README file
+
+commit 5549833c90eabc7950954df49ca3acf8e848a774
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Thu Apr 8 14:53:15 2021 -0500
+
+    Completed 1.08
+    
+    Fully implemented the requirements for 1.08
+
+commit e3bad2c30e68d735a27dd887ffee1f12b9648637
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Apr 7 20:47:37 2021 -0500
+
+    Made progress on 1.08
+    
+    Re-worked monster spawning; Added items, though they are not shown;
+    re-formatted function definitions.
+
+commit 7113dbe5911b8f62aa408eb76b151d72625ef787
+Merge: 10290d8 e22bbed
+Author: arvidg <arvidg@iastate.edu>
+Date:   Wed Apr 7 10:14:10 2021 -0500
+
+    Merge branch 'master' of https://github.com/agustafson19/327HW1
+
+commit 10290d8c11c635d46428ee1e4351945d8ed84175
+Author: arvidg <arvidg@iastate.edu>
+Date:   Wed Apr 7 10:13:32 2021 -0500
+
+    Added 1.08 Instructions
+
+commit e22bbed515371ba6b8c84a6570dc0b834377ef61
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Tue Apr 6 11:18:41 2021 -0500
+
+    Made monster_template be a class
+
+commit d11b74b7ae407d927e8eb4b25494cfa49a85f216
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 31 21:11:41 2021 -0500
+
+    Added The Archive to Submit
+
+commit 2c7a0b9f65c5bcfdb18cda15a85c2c418ca6a247
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Mar 31 21:08:10 2021 -0500
+
+    Updated the changelog
+
 commit 428598b60d913c236d246e43e90f703dae90f964
 Author: agustafson19 <arvidg@iastate.edu>
 Date:   Wed Mar 31 21:07:34 2021 -0500
