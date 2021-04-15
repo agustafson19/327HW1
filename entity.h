@@ -39,7 +39,7 @@ class item_template_t {
 class item_t : public entity_t {
     public:
         item_template_t *entry;
-        uint32_t speed_bonus;
+        int speed_bonus;
         uint32_t attributes;
         uint32_t hitpoint_bonus;
         uint32_t dodge_bonus;
@@ -68,11 +68,11 @@ class character_t : public entity_t {
         character_template_t *entry;
         uint16_t data;
         uint16_t sequence;
-        uint16_t speed;
+        int speed;
         int hitpoints;
         uint8_t num_items;
-        item_t *inventory;
-        item_t *equipment;
+        item_t **inventory;
+        item_t **equipment;
 };
 
 class monster_t : public character_t {

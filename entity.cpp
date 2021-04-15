@@ -10,8 +10,9 @@ void *character_template_t::instantiate()
     monster->data = abilities;
     monster->speed = speed.toss();
     monster->hitpoints = hitpoints.toss();
-    monster->inventory = (item_t *) malloc(10*sizeof(item_t));
-    monster->equipment = (item_t *) malloc(12*sizeof(item_t));
+    monster->num_items = 0;
+    monster->inventory = (item_t **) calloc(10, sizeof(item_t));
+    monster->equipment = (item_t **) calloc(12, sizeof(item_t));
     monster->known_location.xpos = 0;
     monster->known_location.ypos = 0;
     return monster;

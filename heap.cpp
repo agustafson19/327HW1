@@ -56,6 +56,36 @@ int heap_add(heap_t *h, void *value, uint32_t priority)
     return 0;
 }
 
+int heap_remove(heap_t *h, void *value)
+{
+    uint32_t i, j;
+    heap_node_t temp;
+    for (i = 0; i < h->size; i++) {
+        if (h->nodes[i].value == value) {
+            h->size--;
+            h->nodes[i].value = h->nodes[h->size].value;
+            h->nodes[i].priority = h->nodes[h->size].priority;
+            while (2*i+1 < h->size) {
+                if (2*i+2 < h->size) {
+                    j = h->nodes[2*i+1].priority < h->nodes[2*i+2].priority ? 2*i+1 : 2*i + 2;
+                }
+                else {
+                    j = 2*i+1;
+                }
+                if (h->nodes[i].priority < h->nodes[j].priority) {
+                    break;
+                }
+                temp = h->nodes[i];
+                h->nodes[i] = h->nodes[j];
+                h->nodes[j] = temp;
+                i = j;
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int heap_decrease_priority_vertex(heap_t *h, void *value, uint32_t priority)
 {
     uint32_t i;

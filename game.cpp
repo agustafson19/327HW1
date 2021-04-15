@@ -59,6 +59,9 @@
 #define FOG 0x40
 #define TELEPORT 0x80
 #define KILL_BOSS 0x100
+#define INVENTORY 0x200
+#define EQUIPMENT 0x400
+#define LOOK 0x800
 
 /* Equipment Slots */
 #define WEAPON 0
@@ -214,6 +217,7 @@ void player_command(
         char visible_map[W_HEIGHT][W_WIDTH],
         char map[W_HEIGHT][W_WIDTH],
         character_t *character_map[W_HEIGHT][W_WIDTH],
+        heap_t *items,
         std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH]
 );
 
@@ -269,6 +273,7 @@ void tunnel(
 );
 
 void move_character(
+        character_t *player,
         character_t *character_map[W_HEIGHT][W_WIDTH],
         character_t *character,
         vertex_t *hither,
@@ -277,12 +282,46 @@ void move_character(
 );
 
 /* Special Commands */
-void teleport_command(
+std::string equipment_num_to_slot (
+        int num
+);
+
+void draw_inventory (
+        character_t *player
+);
+
+void draw_equipment (
+        character_t *player
+);
+
+void prompt_inventory (
+        character_t *player,
+        uint8_t *i
+);
+
+void prompt_equipment (
+        character_t *player,
+        uint8_t *i
+);
+
+void display_item(
+        character_t *player,
+        item_t *item
+);
+
+void display_character(
+        character_t *player,
+        character_t *character
+);
+
+void prompt_place(
         character_t *player,
         vertex_t *thither,
         char map[W_HEIGHT][W_WIDTH],
+        char visible_map[W_HEIGHT][W_WIDTH],
         character_t *character_map[W_HEIGHT][W_WIDTH],
-        std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH]
+        std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH],
+        const char c
 );
 
 void monster_list(
@@ -346,6 +385,7 @@ int main(int argc, char *argv[])
 
     /* Declarations */
     uint8_t args = 0x00;
+    uint8_t i;
     uint8_t hardness[W_HEIGHT][W_WIDTH];
     uint16_t floor_distance[W_HEIGHT][W_WIDTH];
     uint16_t tunnel_distance[W_HEIGHT][W_WIDTH];
@@ -452,9 +492,9 @@ int main(int argc, char *argv[])
                         hither.xpos = player->xpos;
                         hither.ypos = player->ypos;
                         thither = (vertex_t *) malloc(sizeof(vertex_t));
-                        player_command(player, thither, visible_map, map, character_map, item_map);
+                        player_command(player, thither, visible_map, map, character_map, &items, item_map);
                         if (map[thither->ypos][thither->xpos] != ' ') {
-                            move_character(character_map, character, &hither, thither, &num_monsters);
+                            move_character(player, character_map, character, &hither, thither, &num_monsters);
                         }
                         dijkstra(hardness, map, player, floor_distance, 0);
                         dijkstra(hardness, map, player, tunnel_distance, 1);
@@ -474,7 +514,19 @@ int main(int argc, char *argv[])
                                 if (character->data & (UNIQ | BOSS) && character->hitpoints >= 0)
                                     stack_push(&monster_carry, character);
                                 else {
+                                    for (i = 0; i < 10; i++) {
+                                        if (character->inventory[i] != NULL) {
+                                            free(character->inventory[i]);
+                                            character->inventory[i] = NULL;
+                                        }
+                                    }
                                     free(character->inventory);
+                                    for (i = 0; i < 12; i++) {
+                                        if (character->equipment[i] != NULL) {
+                                            free(character->equipment[i]);
+                                            character->equipment[i] = NULL;
+                                        }
+                                    }
                                     free(character->equipment);
                                     free(character);
                                 }
@@ -484,7 +536,19 @@ int main(int argc, char *argv[])
                                 if (character->data & (UNIQ | BOSS) && character->hitpoints >= 0)
                                     stack_push(&monster_carry, character);
                                 else {
+                                    for (i = 0; i < 10; i++) {
+                                        if (character->inventory[i] != NULL) {
+                                            free(character->inventory[i]);
+                                            character->inventory[i] = NULL;
+                                        }
+                                    }
                                     free(character->inventory);
+                                    for (i = 0; i < 12; i++) {
+                                        if (character->equipment[i] != NULL) {
+                                            free(character->equipment[i]);
+                                            character->equipment[i] = NULL;
+                                        }
+                                    }
                                     free(character->equipment);
                                     free(character);
                                 }
@@ -525,9 +589,9 @@ int main(int argc, char *argv[])
                             thither = (vertex_t *) malloc(sizeof(vertex_t));
                             thither->ypos = player->ypos;
                             thither->xpos = player->xpos;
-                            teleport_command(player, thither, map, character_map, item_map);
+                            prompt_place(player, thither, map, visible_map, character_map, item_map, 'g');
                             if (!(player->data & ESCAPE)) {
-                                move_character(character_map, character, &hither, thither, &num_monsters);
+                                move_character(player, character_map, character, &hither, thither, &num_monsters);
                             }
                             free(thither);
                         }
@@ -538,13 +602,74 @@ int main(int argc, char *argv[])
                     derive_move_stack(&move_stack, map, hardness, character, &hither, &thither);
                     monster_turn(&move_stack, character_map, (monster_t *) character, player, map, hardness, floor_distance, tunnel_distance, pass_distance, &hither, &thither, &num_monsters);
                     stack_delete(&move_stack);
+                    if (item_map[thither->ypos][thither->xpos].size() > 0 && character->data & DESTROY) {
+                        item = item_map[thither->ypos][thither->xpos].back();
+                        item_map[thither->ypos][thither->xpos].pop_back();
+                        heap_remove(&items, item);
+                        free(item);
+                    }
+                    else if (item_map[thither->ypos][thither->xpos].size() > 0 && character->data & PICKUP && character->num_items < 10) {
+                        item = item_map[thither->ypos][thither->xpos].back();
+                        item_map[thither->ypos][thither->xpos].pop_back();
+                        heap_remove(&items, item);
+                        character->inventory[character->num_items] = item;
+                        if (item->entry->type < RING1) {
+                            if (character->equipment[item->entry->type] != NULL) {
+                                character->hitpoints -= character->equipment[item->entry->type]->hitpoint_bonus;
+                                character->speed -= character->equipment[item->entry->type]->speed_bonus;
+                            }
+                            character->inventory[character->num_items] = character->equipment[item->entry->type];
+                            character->equipment[item->entry->type] = item;
+                            character->hitpoints += item->hitpoint_bonus;
+                            character->speed += item->speed_bonus;
+                            if (character->inventory[character->num_items] == NULL)
+                                character->num_items -= 1;
+                        }
+                        else if (item->entry->type < OTHER && character->equipment[RING1] == NULL) {
+                            if (character->equipment[RING1] != NULL) {
+                                character->hitpoints -= character->equipment[RING1]->hitpoint_bonus;
+                                character->speed -= character->equipment[RING1]->speed_bonus;
+                            }
+                            character->inventory[character->num_items] = character->equipment[RING1];
+                            character->equipment[RING1] = item;
+                            character->hitpoints += item->hitpoint_bonus;
+                            character->speed += item->speed_bonus;
+                            if (character->inventory[character->num_items] == NULL)
+                                character->num_items -= 1;
+                        }
+                        else if (item->entry->type < OTHER) {
+                            if (character->equipment[RING2] != NULL) {
+                                character->hitpoints -= character->equipment[RING2]->hitpoint_bonus;
+                                character->speed -= character->equipment[RING2]->speed_bonus;
+                            }
+                            character->inventory[character->num_items] = character->equipment[RING2];
+                            character->equipment[RING2] = item;
+                            character->hitpoints += item->hitpoint_bonus;
+                            character->speed += item->speed_bonus;
+                            if (character->inventory[character->num_items] == NULL)
+                                character->num_items -= 1;
+                        }
+                        character->num_items++;
+                    }
                     free(thither);
                 }
             }
             else {
                 if (character_map[character->ypos][character->xpos] == character)
                     character_map[character->ypos][character->xpos] = NULL;
+                for (i = 0; i < 10; i++) {
+                    if (character->inventory[i] != NULL) {
+                        free(character->inventory[i]);
+                        character->inventory[i] = NULL;
+                    }
+                }
                 free(character->inventory);
+                for (i = 0; i < 12; i++) {
+                    if (character->equipment[i] != NULL) {
+                        free(character->equipment[i]);
+                        character->equipment[i] = NULL;
+                    }
+                }
                 free(character->equipment);
                 free(character);
             }
@@ -636,9 +761,9 @@ void init_item_map(std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH])
 void init_player_template(character_template_t *player_template)
 {
     player_template->name = "Player";
-    player_template->damage.base = 10000;
-    player_template->damage.num = 0;
-    player_template->damage.sides = 0;
+    player_template->damage.base = 0;
+    player_template->damage.num = 1;
+    player_template->damage.sides = 4;
 }
 
 int load_monster_dictionary(std::vector<character_template_t> *monster_dictionary)
@@ -1436,11 +1561,11 @@ void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDT
     player->sequence = 0;
     player->data = 0x0000;
     player->data |= FOG;
-    player->speed = 100;
-    player->hitpoints = 10000;
+    player->speed = 10;
+    player->hitpoints = 1000;
     player->num_items = 0;
-    player->inventory = (item_t *) malloc(10*sizeof(item_t));
-    player->equipment = (item_t *) malloc(12*sizeof(item_t));
+    player->inventory = (item_t **) calloc(10, sizeof(item_t));
+    player->equipment = (item_t **) calloc(12, sizeof(item_t));
     heap_add(characters, player, 0);
     character_map[player->ypos][player->xpos] = player;
 }
@@ -1678,9 +1803,13 @@ void derive_move_stack(stack_t *move_stack, char map[W_HEIGHT][W_WIDTH], uint8_t
     stack_push(move_stack, *thither);
 }
 
-void player_command(character_t *player, vertex_t *thither, char visible_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH])
+void player_command(character_t *player, vertex_t *thither, char visible_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], heap_t *items, std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH])
 {
     int cmd;
+    uint8_t i;
+    vertex_t *v;
+    item_t *item;
+    character_t *character;
     thither->xpos = player->xpos;
     thither->ypos = player->ypos;
     player->data &= ~(WALK_UP & WALK_DOWN);
@@ -1733,6 +1862,294 @@ void player_command(character_t *player, vertex_t *thither, char visible_map[W_H
             case '5':
             case ' ':
                 break;
+            case ',':
+                if (item_map[player->ypos][player->xpos].size() > 0 && player->num_items < 10) {
+                    item = item_map[player->ypos][player->xpos].back();
+                    prompt_inventory(player, &i);
+                    if (player->data & (ESCAPE | QUIT)) {
+                        player->data &= ~ESCAPE;
+                    }
+                    else if (player->inventory[i] == NULL) {
+                        item_map[player->ypos][player->xpos].pop_back();
+                        heap_remove(items, item);
+                        player->inventory[i] = item;
+                        player->num_items += 1;
+                    }
+                    else {
+                        mvprintw(0, 0, "You already have something in this slot.");
+                        refresh();
+                        cmd = getch();
+                        if (cmd == 'Q')
+                            player->data |= QUIT;
+                        mvprintw(0, 0, "                                                                                ");
+                    }
+                }
+                else if (item_map[player->ypos][player->xpos].size() == 0) {
+                    mvprintw(0, 0, "There is nothing to pick up.");
+                    refresh();
+                    cmd = getch();
+                    if (cmd == 'Q')
+                        player->data |= QUIT;
+                    mvprintw(0, 0, "                                                                                ");
+                }
+                else if (player->num_items >= 10) {
+                    mvprintw(0, 0, "You are carrying too much.");
+                    refresh();
+                    cmd = getch();
+                    if (cmd == 'Q')
+                        player->data |= QUIT;
+                    mvprintw(0, 0, "                                                                                ");
+                }
+                if (player->data & FOG)
+                    draw_fog(visible_map, character_map, item_map, player);
+                else
+                    draw_full(map, character_map, item_map);
+                refresh();
+                player->data |= RESET;
+                break;
+            case 'w':
+                prompt_inventory(player, &i);
+                item = player->inventory[i];
+                if (player->data & (ESCAPE | QUIT)) {
+                    player->data &= ~ESCAPE;
+                }
+                else if (item != NULL) {
+                    if (item->entry->type < RING1) {
+                        if (player->equipment[item->entry->type] != NULL) {
+                            player->hitpoints -= player->equipment[item->entry->type]->hitpoint_bonus;
+                            player->speed -= player->equipment[item->entry->type]->speed_bonus;
+                        }
+                        player->inventory[i] = player->equipment[item->entry->type];
+                        player->equipment[item->entry->type] = item;
+                        player->hitpoints += item->hitpoint_bonus;
+                        player->speed += item->speed_bonus;
+                        if (player->inventory[i] == NULL)
+                            player->num_items -= 1;
+                    }
+                    else if (item->entry->type < OTHER && player->equipment[RING1] == NULL) {
+                        if (player->equipment[RING1] != NULL) {
+                            player->hitpoints -= player->equipment[RING1]->hitpoint_bonus;
+                            player->speed -= player->equipment[RING1]->speed_bonus;
+                        }
+                        player->inventory[i] = player->equipment[RING1];
+                        player->equipment[RING1] = item;
+                        player->hitpoints += item->hitpoint_bonus;
+                        player->speed += item->speed_bonus;
+                        if (player->inventory[i] == NULL)
+                            player->num_items -= 1;
+                    }
+                    else if (item->entry->type < OTHER) {
+                        if (player->equipment[RING2] != NULL) {
+                            player->hitpoints -= player->equipment[RING2]->hitpoint_bonus;
+                            player->speed -= player->equipment[RING2]->speed_bonus;
+                        }
+                        player->inventory[i] = player->equipment[RING2];
+                        player->equipment[RING2] = item;
+                        player->hitpoints += item->hitpoint_bonus;
+                        player->speed += item->speed_bonus;
+                        if (player->inventory[i] == NULL)
+                            player->num_items -= 1;
+                    }
+                    else {
+                        mvprintw(0, 0, "This item cannot be equipped.");
+                        refresh();
+                        cmd = getch();
+                        if (cmd == 'Q')
+                            player->data |= QUIT;
+                        mvprintw(0, 0, "                                                                                ");
+                    }
+                }
+                else {
+                    mvprintw(0, 0, "No item was selected.");
+                    refresh();
+                    cmd = getch();
+                    if (cmd == 'Q')
+                        player->data |= QUIT;
+                    mvprintw(0, 0, "                                                                                ");
+                }
+                if (player->data & FOG)
+                    draw_fog(visible_map, character_map, item_map, player);
+                else
+                    draw_full(map, character_map, item_map);
+                refresh();
+                player->data |= RESET;
+                break;
+            case 't':
+                prompt_equipment(player, &i);
+                item = player->equipment[i];
+                if (player->data & (ESCAPE | QUIT)) {
+                    player->data &= ~ESCAPE;
+                }
+                else if (item != NULL) {
+                    if (player->num_items < 10) {
+                        player->equipment[i] = NULL;
+                        for (i = 0; player->inventory[i] != NULL; i++);
+                        player->inventory[i] = item;
+                        player->num_items += 1;
+                        player->hitpoints -= item->hitpoint_bonus;
+                        player->speed -= item->speed_bonus;
+                    }
+                    else {
+                        mvprintw(0, 0, "There is not enough space in your inventory.");
+                        refresh();
+                        cmd = getch();
+                        if (cmd == 'Q')
+                            player->data |= QUIT;
+                        mvprintw(0, 0, "                                                                                ");
+                    }
+                }
+                else {
+                    mvprintw(0, 0, "No item was selected.");
+                    refresh();
+                    cmd = getch();
+                    if (cmd == 'Q')
+                        player->data |= QUIT;
+                    mvprintw(0, 0, "                                                                                ");
+                }
+                if (player->data & FOG)
+                    draw_fog(visible_map, character_map, item_map, player);
+                else
+                    draw_full(map, character_map, item_map);
+                refresh();
+                player->data |= RESET;
+                break;
+            case 'd':
+                prompt_inventory(player, &i);
+                item = player->inventory[i];
+                if (player->data & (ESCAPE | QUIT)) {
+                    player->data &= ~ESCAPE;
+                }
+                else if (item != NULL) {
+                    player->inventory[i] = NULL;
+                    item->xpos = player->xpos;
+                    item->ypos = player->ypos;
+                    heap_add(items, item, 0);
+                    item_map[player->ypos][player->xpos].push_back(item);
+                    player->num_items -= 1;
+                }
+                else {
+                    mvprintw(0, 0, "No item was selected.");
+                    refresh();
+                    cmd = getch();
+                    if (cmd == 'Q')
+                        player->data |= QUIT;
+                    mvprintw(0, 0, "                                                                                ");
+                }
+                if (player->data & FOG)
+                    draw_fog(visible_map, character_map, item_map, player);
+                else
+                    draw_full(map, character_map, item_map);
+                refresh();
+                player->data |= RESET;
+                break;
+            case 'x':
+                prompt_inventory(player, &i);
+                item = player->inventory[i];
+                if (player->data & (ESCAPE | QUIT)) {
+                    player->data &= ~ESCAPE;
+                }
+                else if (item != NULL) {
+                    player->inventory[i] = NULL;
+                    player->num_items -= 1;
+                    free(item);
+                }
+                else {
+                    mvprintw(0, 0, "No item was selected.");
+                    refresh();
+                    cmd = getch();
+                    if (cmd == 'Q')
+                        player->data |= QUIT;
+                    mvprintw(0, 0, "                                                                                ");
+                }
+                if (player->data & FOG)
+                    draw_fog(visible_map, character_map, item_map, player);
+                else
+                    draw_full(map, character_map, item_map);
+                refresh();
+                player->data |= RESET;
+                break;
+            case 'i':
+                draw_inventory(player);
+                refresh();
+                cmd = getch();
+                if (cmd == 'Q')
+                    player->data |= QUIT;
+                if (player->data & FOG)
+                    draw_fog(visible_map, character_map, item_map, player);
+                else
+                    draw_full(map, character_map, item_map);
+                refresh();
+                player->data |= RESET;
+                break;
+            case 'e':
+                draw_equipment(player);
+                refresh();
+                cmd = getch();
+                if (cmd == 'Q')
+                    player->data |= QUIT;
+                if (player->data & FOG)
+                    draw_fog(visible_map, character_map, item_map, player);
+                else
+                    draw_full(map, character_map, item_map);
+                refresh();
+                player->data |= RESET;
+                break;
+            case 'I':
+                prompt_inventory(player, &i);
+                item = player->inventory[i];
+                if (player->data & (ESCAPE | QUIT)) {
+                    player->data &= ~ESCAPE;
+                }
+                else if (item != NULL) {
+                    display_item(player, item);
+                    player->data &= ~ESCAPE;
+                }
+                else {
+                    mvprintw(0, 0, "No item was selected.");
+                    refresh();
+                    cmd = getch();
+                    if (cmd == 'Q')
+                        player->data |= QUIT;
+                    mvprintw(0, 0, "                                                                                ");
+                }
+                if (player->data & FOG)
+                    draw_fog(visible_map, character_map, item_map, player);
+                else
+                    draw_full(map, character_map, item_map);
+                refresh();
+                player->data |= RESET;
+                break;
+            case 'L':
+                v = (vertex_t *) malloc(sizeof(vertex_t));
+                v->xpos = player->xpos;
+                v->ypos = player->ypos;
+                prompt_place(player, v, map, visible_map, character_map, item_map, 't');
+                character = character_map[v->ypos][v->xpos];
+                if (player->data & (ESCAPE | QUIT)) {
+                    player->data &= ~ESCAPE;
+                }
+                else if (character != NULL && (!(player->data & FOG) ||
+                        (player->xpos - character->xpos >= -2 && player->xpos - character->xpos <= 2 &&
+                        player->ypos - character->ypos >= -2 && player->ypos - character->ypos <= 2))) {
+                    display_character(player, character);
+                    player->data &= ~ESCAPE;
+                }
+                else {
+                    mvprintw(0, 0, "No character was selected.");
+                    refresh();
+                    cmd = getch();
+                    if (cmd == 'Q')
+                        player->data |= QUIT;
+                    mvprintw(0, 0, "                                                                                ");
+                }
+                if (player->data & FOG)
+                    draw_fog(visible_map, character_map, item_map, player);
+                else
+                    draw_full(map, character_map, item_map);
+                refresh();
+                player->data |= RESET;
+                free(v);
+                break;
             case 'm':
                 player->data |= MON_LIST;
                 break;
@@ -1758,7 +2175,7 @@ void player_command(character_t *player, vertex_t *thither, char visible_map[W_H
                 player->data |= RESET;
                 break;
         }
-    } while (player->data & RESET);
+    } while (player->data & RESET && !(player->data & QUIT));
     player->data &= ~RESET;
 }
 
@@ -1766,6 +2183,7 @@ void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WI
 {
     uint8_t num;
     uint16_t custom_distance[W_HEIGHT][W_WIDTH];
+    int cmd;
     stack_t s1, s2;
     vertex_t *u;
     vertex_t v;
@@ -1837,10 +2255,14 @@ void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WI
             character_map[other->ypos][other->xpos] = other;
             mvprintw(0, 0, "%s has pushed %s out of its way", character->entry->name.c_str(), other->entry->name.c_str());
             refresh();
-            getch();
+            if (!(player->data & QUIT)) {
+                cmd = getch();
+                if (cmd == 'Q')
+                    player->data |= QUIT;
+            }
             mvprintw(0, 0, "                                                                                ");
         }
-        move_character(character_map, character, hither, *thither, num_monsters);
+        move_character(player, character_map, character, hither, *thither, num_monsters);
     }
     stack_delete(&s1);
     stack_delete(&s2);
@@ -1948,21 +2370,41 @@ void tunnel(uint8_t hardness[W_HEIGHT][W_WIDTH], character_t *player, uint16_t f
     }
 }
 
-void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, vertex_t *hither, vertex_t *thither, uint16_t *num_monsters)
+void move_character(character_t *player, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, vertex_t *hither, vertex_t *thither, uint16_t *num_monsters)
 {
-    int dmg;
+    uint8_t i;
+    int dmg, cmd;
     character_t *other = character_map[thither->ypos][thither->xpos];
     if (other != NULL && other != character) {
         dmg = character->entry->damage.toss();
+        for (i = 0; i < 12; i++) {
+            if (character->equipment[i] != NULL) {
+                dmg += character->equipment[i]->entry->damage_bonus.toss();
+            }
+        }
+        for (i = 0; i < 12; i++) {
+            if (other->equipment[i] != NULL) {
+                dmg -= other->equipment[i]->defence_bonus;
+            }
+        }
+        dmg = dmg > 0 ? dmg : 0;
         other->hitpoints -= dmg;
         mvprintw(0, 0, "%s hit %s for %d, who now has %d hitpoints.", character->entry->name.c_str(), other->entry->name.c_str(), dmg, other->hitpoints);
         refresh();
-        getch();
+        if (!(player->data & QUIT)) {
+            cmd = getch();
+            if (cmd == 'Q')
+                player->data |= QUIT;
+        }
         mvprintw(0, 0, "                                                                                ");
         if (other->hitpoints < 0) {
             mvprintw(0, 0, "%s has died to %s.", other->entry->name.c_str(), character->entry->name.c_str());
             refresh();
-            getch();
+            if (!player->data & QUIT) {
+                cmd = getch();
+                if (cmd == 'Q')
+                    player->data |= QUIT;
+            }
             mvprintw(0, 0, "                                                                                ");
             if (character_map[thither->ypos][thither->xpos]->symbol != '@')
                 *num_monsters -= 1;
@@ -1984,12 +2426,266 @@ void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *
     }
 }
 
-void teleport_command(character_t *player, vertex_t *thither, char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH])
+std::string equipment_num_to_slot(int num)
+{
+    switch(num) {
+        case 0: return "WEAPON";
+        case 1: return "OFFHAND";
+        case 2: return "RANGED";
+        case 3: return "ARMOR";
+        case 4: return "HELMET";
+        case 5: return "CLOAK";
+        case 6: return "GLOVES";
+        case 7: return "BOOTS";
+        case 8: return "AMULET";
+        case 9: return "LIGHT";
+        case 10: return "RING1";
+        case 11: return "RING2";
+        default: return "OTHER";
+    }
+    return NULL;
+}
+
+void draw_inventory(character_t *player)
+{
+    uint8_t i;
+    for (i = 0; i < 13; i++) {
+        mvprintw(4 + i, 20, "                                        ");
+    }
+    mvprintw(5, 20, "Number of Items: %d", player->num_items);
+    for (i = 0; i < 10; i++) {
+        mvprintw(6 + i, 23, "%2d) ", i);
+        if (player->inventory[i] != NULL) {
+            mvprintw(6 + i, 27, "%s", player->inventory[i]->entry->name.c_str());
+        }
+        else {
+            mvprintw(6 + i, 27, "(none)");
+        }
+    }
+}
+
+void draw_equipment(character_t *player)
+{
+    uint8_t i;
+    for (i = 0; i < 16; i++) {
+        mvprintw(3 + i, 20, "                                        ");
+    }
+    mvprintw(4, 23, "Speed: %d", player->speed);
+    mvprintw(5, 23, "HP: %d", player->hitpoints);
+    for (i = 0; i < 12; i++) {
+        if (player->equipment[i] != NULL) {
+            mvprintw(6 + i, 23, "%7s) %s", equipment_num_to_slot(i).c_str(), player->equipment[i]->entry->name.c_str());
+        }
+        else {
+            mvprintw(6 + i, 23, "%7s) (none)", equipment_num_to_slot(i).c_str());
+        }
+    }
+}
+
+void prompt_inventory(character_t *player, uint8_t *i)
+{
+    int cmd;
+    *i = 0;
+    do {
+        draw_inventory(player);
+        mvprintw(6 + *i, 21, ">");
+        refresh();
+        cmd = getch();
+        player->data &= ~RESET;
+        switch (cmd) {
+            case KEY_UP:
+            case 'k':
+                if (*i > 0)
+                    *i -= 1;
+                player->data |= RESET;
+                break;
+            case KEY_DOWN:
+            case 'j':
+                if (*i < 9)
+                    *i += 1;
+                player->data |= RESET;
+                break;
+            case 's':
+                break;
+            /* ESCAPE */
+            case 27:
+                player->data |= ESCAPE;
+                break;
+            case 'Q':
+                player->data |= QUIT;
+                break;
+            default:
+                player->data |= RESET;
+                break;
+        }
+    } while (player->data & RESET);
+    player->data &= ~RESET;
+}
+
+void prompt_equipment(character_t *player, uint8_t *i)
+{
+    int cmd;
+    *i = 0;
+    do {
+        draw_equipment(player);
+        mvprintw(6 + *i, 21, ">");
+        refresh();
+        cmd = getch();
+        player->data &= ~RESET;
+        switch (cmd) {
+            case KEY_UP:
+            case 'k':
+                if (*i > 0)
+                    *i -= 1;
+                player->data |= RESET;
+                break;
+            case KEY_DOWN:
+            case 'j':
+                if (*i < 11)
+                    *i += 1;
+                player->data |= RESET;
+                break;
+            case 's':
+                break;
+            /* ESCAPE */
+            case 27:
+                player->data |= ESCAPE;
+                break;
+            case 'Q':
+                player->data |= QUIT;
+                break;
+            default:
+                player->data |= RESET;
+                break;
+        }
+    } while (player->data & RESET);
+    player->data &= ~RESET;
+}
+
+void display_item(character_t *player, item_t *item)
+{
+    uint16_t i, j, l, m;
+    int cmd;
+    j = 0;
+    l = item->entry->description.size() > 16 ? 21 : item->entry->description.size() + 5;
+    m = item->entry->description.size() > 16 ? item->entry->description.size() - 16 : 0;
+    do {
+        for (i = 0; i < 21; i++)
+            mvprintw(i, 0, "                                                                                ");
+        for (i = -j; i < l - j; i++) {
+            if (i == 0)
+                mvprintw(i + j, 0, "%s", item->entry->name.c_str());
+            else if (i == 1)
+                mvprintw(i + j, 0, "Speed Bonus: %d", item->speed_bonus);
+            else if (i == 2)
+                mvprintw(i + j, 0, "HP Bonus: %d", item->hitpoint_bonus);
+            else if (i == 3)
+                mvprintw(i + j, 0, "Defence Bonus: %d", item->defence_bonus);
+            else if (i == 4)
+                mvprintw(i + j, 0, "Damage Bonus: %d+%dd%d", item->entry->damage_bonus.base, item->entry->damage_bonus.num, item->entry->damage_bonus.sides);
+            else
+                mvprintw(i + j, 0, "%s", item->entry->description[i-5].c_str());
+            refresh();
+        }
+        refresh();
+        cmd = getch();
+        player->data &= ~RESET;
+        switch (cmd) {
+            case KEY_UP:
+            case 'k':
+                if (j > -m)
+                    j -= 1;
+                player->data |= RESET;
+                break;
+            case KEY_DOWN:
+            case 'j':
+                if (j < 0)
+                    j += 1;
+                player->data |= RESET;
+                break;
+            case 's':
+                break;
+            /* ESCAPE */
+            case 27:
+                player->data |= ESCAPE;
+                break;
+            case 'Q':
+                player->data |= QUIT;
+                break;
+            default:
+                break;
+        }
+    } while (player->data & RESET);
+    mvprintw(0, 0, "                                                                                ");
+}
+
+void display_character(character_t *player, character_t *character)
+{
+    uint16_t i, l, m;
+    int j;
+    int cmd;
+    j = 0;
+    l = character->entry->description.size() > 16 ? 21 : character->entry->description.size() + 5;
+    m = character->entry->description.size() > 16 ? character->entry->description.size() - 16 : 0;
+    do {
+        for (i = 0; i < 21; i++)
+            mvprintw(i, 0, "                                                                                ");
+        for (i = -j; i < l - j; i++) {
+            if (i == 0)
+                mvprintw(i + j, 0, "%s", character->entry->name.c_str());
+            else if (i == 1)
+                mvprintw(i + j, 0, "Speed: %d", character->speed);
+            else if (i == 2)
+                mvprintw(i + j, 0, "HP: %d", character->hitpoints);
+            else if (i == 3)
+                mvprintw(i + j, 0, "Damage: %d+%dd%d", character->entry->damage.base, character->entry->damage.num, character->entry->damage.sides);
+            else if (i == 4)
+                mvprintw(i + j, 0, "Number of Items: %d", character->num_items);
+            else
+                mvprintw(i + j, 0, "%s", character->entry->description[i-5].c_str());
+            refresh();
+        }
+        refresh();
+        cmd = getch();
+        player->data &= ~RESET;
+        switch (cmd) {
+            case KEY_UP:
+            case 'k':
+                if (j > -m)
+                    j -= 1;
+                player->data |= RESET;
+                break;
+            case KEY_DOWN:
+            case 'j':
+                if (j < 0)
+                    j += 1;
+                player->data |= RESET;
+                break;
+            case 's':
+                break;
+            /* ESCAPE */
+            case 27:
+                player->data |= ESCAPE;
+                break;
+            case 'Q':
+                player->data |= QUIT;
+                break;
+            default:
+                break;
+        }
+    } while (player->data & RESET);
+    mvprintw(0, 0, "                                                                                ");
+}
+
+void prompt_place(character_t *player, vertex_t *thither, char map[W_HEIGHT][W_WIDTH], char visible_map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH], const char c)
 {
     int cmd;
     player->data &= ~ESCAPE;
     do {
-        draw_full(map, character_map, item_map);
+        if (player->data & FOG)
+            draw_fog(visible_map, character_map, item_map, player);
+        else
+            draw_full(map, character_map, item_map);
         mvprintw(thither->ypos + 1, thither->xpos, "*");
         refresh();
         cmd = getch();
@@ -2051,7 +2747,19 @@ void teleport_command(character_t *player, vertex_t *thither, char map[W_HEIGHT]
                     thither->xpos -= 1;
                 player->data |= RESET;
                 break;
-            case 'g':
+            case 's':
+                break;
+            case 'f':
+                if (player->data & FOG) {
+                    player->data &= ~FOG;
+                    draw_full(map, character_map, item_map);
+                }
+                else {
+                    player->data |= FOG;
+                    draw_fog(visible_map, character_map, item_map, player);
+                }
+                refresh();
+                player->data |= RESET;
                 break;
             /* ESCAPE */
             case 27:
@@ -2061,7 +2769,8 @@ void teleport_command(character_t *player, vertex_t *thither, char map[W_HEIGHT]
                 player->data |= QUIT;
                 break;
             default:
-                player->data |= RESET;
+                if (cmd != c)
+                    player->data |= RESET;
         }
     } while (player->data & RESET);
 }
@@ -2116,9 +2825,11 @@ void monster_list_command(character_t *player)
         player->data &= ~RESET;
         switch (cmd) {
             case KEY_UP:
+            case 'k':
                 player->data |= WALK_UP;
                 break;
             case KEY_DOWN:
+            case 'j':
                 player->data |= WALK_DOWN;
                 break;
             /* ESCAPE */
@@ -2342,13 +3053,13 @@ void draw_fog(char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][
                     attroff(COLOR_PAIR(k));
                 }
                 else if (item_map[i][j].size() == 1) {
-                    for (k = 0, l = 1; (l & item_map[i][j][0]->color) == 0 && k < 7; k++, l *= 2);
+                    for (k = 0, l = 1; (l & item_map[i][j].back()->color) == 0 && k < 7; k++, l *= 2);
                     attron(COLOR_PAIR(k));
-                    mvprintw(i + 1, j, "%c", item_map[i][j][0]->symbol);
+                    mvprintw(i + 1, j, "%c", item_map[i][j].back()->symbol);
                     attroff(COLOR_PAIR(k));
                 }
                 else if (item_map[i][j].size() > 1) {
-                    for (k = 0, l = 1; (l & item_map[i][j][0]->color) == 0 && k < 7; k++, l *= 2);
+                    for (k = 0, l = 1; (l & item_map[i][j].back()->color) == 0 && k < 7; k++, l *= 2);
                     attron(COLOR_PAIR(k));
                     mvprintw(i + 1, j, "&");
                     attroff(COLOR_PAIR(k));
@@ -2376,13 +3087,13 @@ void draw_full(char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT]
                 attroff(COLOR_PAIR(k));
             }
             else if (item_map[i][j].size() == 1) {
-                for (k = 0, l = 1; (l & item_map[i][j][0]->color) == 0 && k < 7; k++, l *= 2);
+                for (k = 0, l = 1; (l & item_map[i][j].back()->color) == 0 && k < 7; k++, l *= 2);
                 attron(COLOR_PAIR(k));
-                mvprintw(i + 1, j, "%c", item_map[i][j][0]->symbol);
+                mvprintw(i + 1, j, "%c", item_map[i][j].back()->symbol);
                 attroff(COLOR_PAIR(k));
             }
             else if (item_map[i][j].size() > 1) {
-                for (k = 0, l = 1; (l & item_map[i][j][0]->color) == 0 && k < 7; k++, l *= 2);
+                for (k = 0, l = 1; (l & item_map[i][j].back()->color) == 0 && k < 7; k++, l *= 2);
                 attron(COLOR_PAIR(k));
                 mvprintw(i + 1, j, "&");
                 attroff(COLOR_PAIR(k));
