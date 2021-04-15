@@ -1,3 +1,55 @@
+commit 627436ae6b85d9dff5624107d29fc0a8480ec0f6
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Thu Apr 15 18:54:40 2021 -0500
+
+    Made a README file.
+
+commit 8b5941099da05b432c4692ce81e3e50a0b8a4774
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Thu Apr 15 18:40:33 2021 -0500
+
+    Finnished Assignment 1.09
+
+commit 061c42d5a7403220063bc53376220e645c4c3502
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Thu Apr 15 00:24:22 2021 -0500
+
+    Started on implementing functionality in items
+    
+    Started on implementing functionality in items
+
+commit 125b2f8ad733f2a0977291f6bbac8f29421eefbd
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Wed Apr 14 23:00:32 2021 -0500
+
+    Added actual combat
+    
+    Added actual combat to the game, alongside pushing. No items yet.
+
+commit 34117b1855745b619f72141b4f2229e82436266d
+Author: arvidg <arvidg@iastate.edu>
+Date:   Wed Apr 14 10:13:35 2021 -0500
+
+    Added instructions for 1.09
+
+commit 264f51c85c50a09e4df98099bd7e8e1b6c2fcb07
+Author: arvidg <arvidg@iastate.edu>
+Date:   Thu Apr 8 15:44:51 2021 -0500
+
+    Corrected name of archive to submit
+
+commit 8e5f819a6c6940604be013f8a466fd2df39c1bd5
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Thu Apr 8 15:42:52 2021 -0500
+
+    Added archive to turn in
+
+commit 153f3e574be73756926ee51d209d1f0772597b56
+Author: agustafson19 <arvidg@iastate.edu>
+Date:   Thu Apr 8 15:41:14 2021 -0500
+
+    Updated CHANGELOG
+
 commit 1d4f542ca43bc70b09defeabd10b545ef574a0f6
 Author: agustafson19 <arvidg@iastate.edu>
 Date:   Thu Apr 8 15:40:50 2021 -0500
