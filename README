@@ -1,24 +1,25 @@
 ARVID GUSTAFSON
 
-Added macros MONSTER_EXISTS and ITEM_EXISTS to implement UNIQ and BOSS monsters, and RELIC items.
+In any menu, use 's' to select. Use 'j' and 'k' to navigate descriptions, e.g. Casper's.
 
-Added item_t and item_template_t classes, alongside load_item_dictionary and print_monster_dictionary functions.
+Use ',' to pick up an item; new commands do not consume a turn.
 
-Added entity_t class, extended by character_t and item_t, and a monster_t which extends character_t.
+The number of items displayed of a monster, like the player, does not count equiped items.
 
-Added instantiate method to monster_template_t and item_template_t, making them factories.
+The stack_delete_characters and heap_delete caracters functions do deep deletes on characters.
 
-Every class related to entities were put into entity.h and entity.cpp.
+The heap_remove function removes a specific element from the heap.
 
-Re-made generate_monsters function, and added generate_items function.
-    Chance for a monster type to spawn: monster type's rarity / sum of all mosnter type's rarity
+The init_item_map initializes the item map, as it is a map of vectors.
 
-The sketch_map function was removed.
+The init_player_template class initializes a character template for the player.
 
-The draw function was split into draw_fog and draw_full functions.
+The equipment_num_to_slot converts an equipment index to a std::string.
 
-Added color; color of highest priority is used; descending priority: BLACK RED GREEN YELLOW BLUE MAGENTA CYAN WHITE; BLACK is the same as WHITE
+The draw_inventory and draw_equipment functions draw the inventory and equipment screens.
 
-Added object permanence to UNIQ and BOSS mosnters, and RELIC items, and each only spawns once.
+The prompt_inventory and prompt_equipment functions are used in managing the player's inventory.
 
-BOSS mosnters always spawn on the first level.
+The display_item and display_character functions are used to display descriptions of existing monsters.
+
+The teleport_command was renamed to prompt_place, and was slightly tweaked.
