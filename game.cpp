@@ -42,7 +42,6 @@
 #define BOSS 0x0200
 
 /* Used for Logic */
-#define ALIVE 0x0200
 #define KNOWN 0x0400
 #define SEE 0x0800
 
@@ -59,7 +58,7 @@
 #define ESCAPE 0x20
 #define FOG 0x40
 #define TELEPORT 0x80
-/* ALIVE is reserved */
+#define KILL_BOSS 0x100
 
 class room_t {
     public:
@@ -82,6 +81,7 @@ void deinit_ncurses();
 void init_map(char map[W_HEIGHT][W_WIDTH], char c);
 void init_entity_map(entity_t *character_map[W_HEIGHT][W_WIDTH]);
 
+void init_player_template(monster_template_t *player_template);
 int load_monster_dictionary(std::vector<monster_template_t> *monster_dictionary);
 int load_item_dictionary(std::vector<item_template_t> *item_dictionary);
 
@@ -137,7 +137,8 @@ void map_rooms (
 void init_player(
         heap_t *characters,
         character_t *character_map[W_HEIGHT][W_WIDTH],
-        character_t *player
+        character_t *player,
+        monster_template_t *player_template
 );
 
 void generate_monsters(
@@ -339,6 +340,7 @@ int main(int argc, char *argv[])
     uint16_t num_u_stairs;
     entity_t *d_stairs;
     uint16_t num_d_stairs;
+    monster_template_t player_template;
     character_t *player;
     std::vector<monster_template_t> monster_dictionary;
     character_t *character;
@@ -353,6 +355,7 @@ int main(int argc, char *argv[])
     item_t *item_map[W_HEIGHT][W_WIDTH];
     stack_t item_carry;
     uint16_t num_init_items;
+    character_t *dummy;
     heap_t next_turn;
     uint32_t priority;
     vertex_t hither;
@@ -380,9 +383,11 @@ int main(int argc, char *argv[])
     place(map, d_stairs, num_d_stairs);
 
     /* Generating Characters */
+    init_player_template(&player_template);
+    player->entry = &player_template;
     heap_init(&characters);
     init_entity_map((entity_t *(*)[80]) character_map);
-    init_player(&characters, character_map, player);
+    init_player(&characters, character_map, player, &player_template);
     stack_init(&monster_carry);
     if (load_monster_dictionary(&monster_dictionary)) {
         deinit_ncurses();
@@ -411,13 +416,13 @@ int main(int argc, char *argv[])
     dijkstra(hardness, map, player, pass_distance, 2);
 
     /* Main Loop */
-    while (player->data & ALIVE && num_monsters && !(player->data & QUIT)) {
+    while (player->hitpoints >= 0 && !(player->data & KILL_BOSS) && !(player->data & QUIT)) {
         derive_next_turn_heap(&characters, &next_turn, &priority);
         /* Character Turn */
         while (heap_size(&next_turn) > 0 && !(player->data & RESET)) {
             player->data &= ~RESET;
             heap_extract_min(&next_turn, (void**) &character);
-            if (character->data & ALIVE) {
+            if (character->hitpoints >= 0) {
                 if (character == player) {
                     do {
                         player->data &= ~MON_LIST;
@@ -445,20 +450,19 @@ int main(int argc, char *argv[])
                         if ((player->data & WALK_UP && player->xpos == u_stairs->xpos && player->ypos == u_stairs->ypos) ||
                             (player->data & WALK_DOWN && player->xpos == d_stairs->xpos && player->ypos == d_stairs->ypos)) {
                             /* new floor */
-                            free(player);
                             free(rooms);
                             free(u_stairs);
                             free(d_stairs);
                             while (heap_size(&characters)) {
                                 heap_extract_min(&characters, (void **) &character);
-                                if (character->data & (UNIQ | BOSS) && character->data & ALIVE)
+                                if (character->data & (UNIQ | BOSS) && character->hitpoints >= 0)
                                     stack_push(&monster_carry, character);
                                 else
                                     free(character);
                             }
                             while (heap_size(&next_turn)) {
                                 heap_extract_min(&next_turn, (void **) &character);
-                                if (character->data & (UNIQ | BOSS) && character->data & ALIVE)
+                                if (character->data & (UNIQ | BOSS) && character->hitpoints >= 0)
                                     stack_push(&monster_carry, character);
                                 else
                                     free(character);
@@ -471,8 +475,12 @@ int main(int argc, char *argv[])
                                     free(item);
                             }
                             heap_delete(&items);
-                            generate(&player, hardness, &num_rooms, &rooms, &num_u_stairs, &u_stairs, &num_d_stairs, &d_stairs);
-                            player->data |= RESET;
+                            generate(&dummy, hardness, &num_rooms, &rooms, &num_u_stairs, &u_stairs, &num_d_stairs, &d_stairs);
+                            player->xpos = dummy->xpos;
+                            player->ypos = dummy->ypos;
+                            player->data &= ~WALK_UP;
+                            player->data &= ~WALK_DOWN;
+                            free(dummy);
                             init_map(map, ' ');
                             init_map(visible_map, ' ');
                             map_rooms(map, hardness, num_rooms, rooms);
@@ -482,7 +490,8 @@ int main(int argc, char *argv[])
                             heap_init(&items);
                             init_entity_map((entity_t *(*)[80]) character_map);
                             init_entity_map((entity_t *(*)[80]) item_map);
-                            init_player(&characters, character_map, player);
+                            heap_add(&characters, player, 0);
+                            character_map[player->ypos][player->xpos] = player;
                             generate_monsters(&monster_dictionary, &characters, character_map, map, num_init_monsters, &monster_carry);
                             generate_items(&item_dictionary, &items, item_map, map, num_init_items, &item_carry);
                             num_monsters = num_init_monsters;
@@ -503,7 +512,7 @@ int main(int argc, char *argv[])
                             }
                             free(thither);
                         }
-                    } while (player->data & (MON_LIST | TELEPORT) && !(player->data & QUIT) && num_monsters);
+                    } while (player->data & (MON_LIST | TELEPORT) && !(player->data & QUIT) && !(player->data & KILL_BOSS));
                 }
                 else {
                     heap_add(&characters, character, priority + 1000 / character->speed);
@@ -526,7 +535,7 @@ int main(int argc, char *argv[])
     clear();
     if (player->data & QUIT)
         draw_quit();
-    else if (player->data & ALIVE)
+    else if (player->hitpoints >= 0)
         draw_win();
     else
         draw_loose();
@@ -589,6 +598,14 @@ void init_entity_map(entity_t *character_map[W_HEIGHT][W_WIDTH])
             character_map[i][j] = NULL;
         }
     }
+}
+
+void init_player_template(monster_template_t *player_template)
+{
+    player_template->name = "Player";
+    player_template->damage.base = 10000;
+    player_template->damage.num = 0;
+    player_template->damage.sides = 0;
 }
 
 int load_monster_dictionary(std::vector<monster_template_t> *monster_dictionary)
@@ -1339,15 +1356,15 @@ void map_rooms(char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH],
     }
 }
 
-void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player)
+void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player, monster_template_t *player_template)
 {
     player->symbol = '@';
     player->color = 0x80;
     player->sequence = 0;
     player->data = 0x0000;
-    player->data |= ALIVE;
     player->data |= FOG;
-    player->speed = 10;
+    player->speed = 100;
+    player->hitpoints = 10000;
     heap_add(characters, player, 0);
     character_map[player->ypos][player->xpos] = player;
 }
@@ -1365,7 +1382,6 @@ void generate_monsters(std::vector<monster_template_t> *monster_dictionary, heap
             (*it).abilities |= MONSTER_EXISTS;
             monster = (monster_t *) (*it).instantiate();
             monster->sequence = i++;
-            monster->data |= ALIVE;
             monster->data &= ~KNOWN;
             monster->data &= ~SEE;
             monster->entry = &(*it);
@@ -1375,7 +1391,6 @@ void generate_monsters(std::vector<monster_template_t> *monster_dictionary, heap
     for (i = 1; i <= num_init_monsters; i++) {
         if (stack_size(monster_carry)) {
             stack_pop(monster_carry, (void **) &monster);
-            monster->data |= ALIVE;
             monster->data &= ~KNOWN;
             monster->data &= ~SEE;
         }
@@ -1389,7 +1404,6 @@ void generate_monsters(std::vector<monster_template_t> *monster_dictionary, heap
             (*it).abilities |= MONSTER_EXISTS;
             monster = (monster_t *) (*it).instantiate();
             monster->sequence = i;
-            monster->data |= ALIVE;
             monster->data &= ~KNOWN;
             monster->data &= ~SEE;
             monster->entry = &(*it);
@@ -1674,8 +1688,15 @@ void player_command(character_t *player, vertex_t *thither, char visible_map[W_H
 
 void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WIDTH], monster_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH], uint16_t floor_distance[W_HEIGHT][W_WIDTH], uint16_t tunnel_distance[W_HEIGHT][W_WIDTH], uint16_t pass_distance[W_HEIGHT][W_WIDTH], vertex_t *hither, vertex_t **thither, uint16_t *num_monsters)
 {
+    uint8_t num;
     uint16_t custom_distance[W_HEIGHT][W_WIDTH];
+    stack_t s1, s2;
+    vertex_t *u;
+    vertex_t v;
     character_t ghost_player;
+    character_t *other;
+    stack_init(&s1);
+    stack_init(&s2);
     if (character->data & ERRATIC && rand() % 2)
         random_move(move_stack, thither);
     else {
@@ -1714,8 +1735,39 @@ void monster_turn(stack_t *move_stack, character_t *character_map[W_HEIGHT][W_WI
         tunnel(hardness, player, floor_distance, tunnel_distance, map, *thither);
     }
     if (map[(*thither)->ypos][(*thither)->xpos] != ' ' || character->data & PASS) {
+        other = character_map[(*thither)->ypos][(*thither)->xpos];
+        if (other != NULL && other != character && other != player) {
+            character_map[character->ypos][character->xpos] = NULL;
+            v.xpos = other->xpos;
+            v.ypos = other->ypos;
+            get_neighbors(&s1, &v, map, hardness, other->data & PASS);
+            while (stack_size(&s1)) {
+                stack_pop(&s1, (void **) &u);
+                if (character_map[u->ypos][u->xpos] == NULL) {
+                    stack_push(&s2, u);
+                }
+                else {
+                    free(u);
+                }
+            }
+            for (num = rand() % stack_size(&s2); num > 0; num--) {
+                stack_pop(&s2, (void **) &u);
+                free(u);
+            }
+            stack_pop(&s2, (void **) &u);
+            character_map[other->ypos][other->xpos] = NULL;
+            other->xpos = u->xpos;
+            other->ypos = u->ypos;
+            character_map[other->ypos][other->xpos] = other;
+            mvprintw(0, 0, "%s has pushed %s out of its way", character->entry->name.c_str(), other->entry->name.c_str());
+            refresh();
+            getch();
+            mvprintw(0, 0, "                                                                                ");
+        }
         move_character(character_map, character, hither, *thither, num_monsters);
     }
+    stack_delete(&s1);
+    stack_delete(&s2);
 }
 
 void line_of_sight(monster_t *character, character_t *player, char map[W_HEIGHT][W_WIDTH])
@@ -1822,16 +1874,38 @@ void tunnel(uint8_t hardness[W_HEIGHT][W_WIDTH], character_t *player, uint16_t f
 
 void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *character, vertex_t *hither, vertex_t *thither, uint16_t *num_monsters)
 {
-    /* [COMBAT] */
-    if (character_map[thither->ypos][thither->xpos] != NULL && character_map[thither->ypos][thither->xpos] != character) {
-        character_map[thither->ypos][thither->xpos]->data &= ~ALIVE;
-        if (character_map[thither->ypos][thither->xpos]->symbol != '@')
-            *num_monsters -= 1;
+    int dmg;
+    character_t *other = character_map[thither->ypos][thither->xpos];
+    if (other != NULL && other != character) {
+        dmg = character->entry->damage.toss();
+        other->hitpoints -= dmg;
+        mvprintw(0, 0, "%s hit %s for %d, who now has %d hitpoints.", character->entry->name.c_str(), other->entry->name.c_str(), dmg, other->hitpoints);
+        refresh();
+        getch();
+        mvprintw(0, 0, "                                                                                ");
+        if (other->hitpoints < 0) {
+            mvprintw(0, 0, "%s has died to %s.", other->entry->name.c_str(), character->entry->name.c_str());
+            refresh();
+            getch();
+            mvprintw(0, 0, "                                                                                ");
+            if (character_map[thither->ypos][thither->xpos]->symbol != '@')
+                *num_monsters -= 1;
+            if (other->data & BOSS)
+                character->data |= KILL_BOSS;
+            if (character_map[hither->ypos][hither->xpos] == character)
+                character_map[hither->ypos][hither->xpos] = NULL;
+            character_map[thither->ypos][thither->xpos] = character;
+            character->xpos = thither->xpos;
+            character->ypos = thither->ypos;
+        }
     }
-    character_map[hither->ypos][hither->xpos] = NULL;
-    character_map[thither->ypos][thither->xpos] = character;
-    character->xpos = thither->xpos;
-    character->ypos = thither->ypos;
+    else {
+        if (character_map[hither->ypos][hither->xpos] == character)
+            character_map[hither->ypos][hither->xpos] = NULL;
+        character_map[thither->ypos][thither->xpos] = character;
+        character->xpos = thither->xpos;
+        character->ypos = thither->ypos;
+    }
 }
 
 void teleport_command(character_t *player, vertex_t *thither, char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], item_t *item_map[W_HEIGHT][W_WIDTH])

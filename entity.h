@@ -15,13 +15,6 @@ class entity_t {
         uint8_t color;
 };
 
-class character_t : public entity_t {
-    public:
-        uint16_t data;
-        uint16_t sequence;
-        uint8_t speed;
-};
-
 class monster_template_t {
     public:
         std::string name;
@@ -37,10 +30,17 @@ class monster_template_t {
         void *instantiate();
 };
 
-class monster_t : public character_t {
+class character_t : public entity_t {
     public:
         monster_template_t *entry;
-        uint32_t hitpoints;
+        uint16_t data;
+        uint16_t sequence;
+        uint16_t speed;
+        int hitpoints;
+};
+
+class monster_t : public character_t {
+    public:
         vertex_t known_location;
 };
 
