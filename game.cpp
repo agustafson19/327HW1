@@ -60,6 +60,21 @@
 #define TELEPORT 0x80
 #define KILL_BOSS 0x100
 
+/* Equipment Slots */
+#define WEAPON 0
+#define OFFHAND 1
+#define RANGED 2
+#define ARMOR 3
+#define HELMET 4
+#define CLOAK 5
+#define GLOVES 6
+#define BOOTS 7
+#define AMULET 8
+#define LIGHT 9
+#define RING1 10
+#define RING2 11
+#define OTHER 12
+
 class room_t {
     public:
         uint8_t xpos;
@@ -80,9 +95,10 @@ void deinit_ncurses();
 
 void init_map(char map[W_HEIGHT][W_WIDTH], char c);
 void init_entity_map(entity_t *character_map[W_HEIGHT][W_WIDTH]);
+void init_item_map(std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH]);
 
-void init_player_template(monster_template_t *player_template);
-int load_monster_dictionary(std::vector<monster_template_t> *monster_dictionary);
+void init_player_template(character_template_t *player_template);
+int load_monster_dictionary(std::vector<character_template_t> *monster_dictionary);
 int load_item_dictionary(std::vector<item_template_t> *item_dictionary);
 
 void get_args (
@@ -138,11 +154,11 @@ void init_player(
         heap_t *characters,
         character_t *character_map[W_HEIGHT][W_WIDTH],
         character_t *player,
-        monster_template_t *player_template
+        character_template_t *player_template
 );
 
 void generate_monsters(
-        std::vector<monster_template_t> *monster_dictionary,
+        std::vector<character_template_t> *monster_dictionary,
         heap_t *characters,
         character_t *character_map[W_HEIGHT][W_WIDTH],
         char map[W_HEIGHT][W_WIDTH],
@@ -153,7 +169,7 @@ void generate_monsters(
 void generate_items(
         std::vector<item_template_t> *item_dictionary,
         heap_t *items,
-        item_t *item_map[W_HEIGHT][W_WIDTH],
+        std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH],
         char map[W_HEIGHT][W_WIDTH],
         uint16_t num_init_items,
         stack_t *item_carry
@@ -198,7 +214,7 @@ void player_command(
         char visible_map[W_HEIGHT][W_WIDTH],
         char map[W_HEIGHT][W_WIDTH],
         character_t *character_map[W_HEIGHT][W_WIDTH],
-        item_t *item_map[W_HEIGHT][W_WIDTH]
+        std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH]
 );
 
 void monster_turn(
@@ -266,7 +282,7 @@ void teleport_command(
         vertex_t *thither,
         char map[W_HEIGHT][W_WIDTH],
         character_t *character_map[W_HEIGHT][W_WIDTH],
-        item_t *item_map[W_HEIGHT][W_WIDTH]
+        std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH]
 );
 
 void monster_list(
@@ -298,7 +314,7 @@ void sketch_visible_map(
 );
 
 /* Debugging */
-void print_monster_dictionary(std::vector<monster_template_t> monster_dictionary);
+void print_monster_dictionary(std::vector<character_template_t> monster_dictionary);
 void print_item_dictionary(std::vector<item_template_t> item_dictionary);
 void draw_distance( uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH]);
 
@@ -306,14 +322,14 @@ void draw_distance( uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_W
 void draw_fog(
         char map[W_HEIGHT][W_WIDTH],
         character_t *character_map[W_HEIGHT][W_WIDTH],
-        item_t *item_map[W_HEIGHT][W_WIDTH],
+        std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH],
         character_t *player
 );
 
 void draw_full(
         char map[W_HEIGHT][W_WIDTH],
         character_t *character_map[W_HEIGHT][W_WIDTH],
-        item_t *item_map[W_HEIGHT][W_WIDTH]
+        std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH]
 );
 
 void draw_quit();
@@ -340,9 +356,9 @@ int main(int argc, char *argv[])
     uint16_t num_u_stairs;
     entity_t *d_stairs;
     uint16_t num_d_stairs;
-    monster_template_t player_template;
+    character_template_t player_template;
     character_t *player;
-    std::vector<monster_template_t> monster_dictionary;
+    std::vector<character_template_t> monster_dictionary;
     character_t *character;
     heap_t characters;
     character_t *character_map[W_HEIGHT][W_WIDTH];
@@ -352,7 +368,7 @@ int main(int argc, char *argv[])
     std::vector<item_template_t> item_dictionary;
     item_t *item;
     heap_t items;
-    item_t *item_map[W_HEIGHT][W_WIDTH];
+    std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH];
     stack_t item_carry;
     uint16_t num_init_items;
     character_t *dummy;
@@ -401,7 +417,7 @@ int main(int argc, char *argv[])
 
     /* Generating Items */
     heap_init(&items);
-    init_entity_map((entity_t *(*)[80]) item_map);
+    init_item_map(item_map);
     stack_init(&item_carry);
     if (load_item_dictionary(&item_dictionary)) {
         deinit_ncurses();
@@ -457,15 +473,21 @@ int main(int argc, char *argv[])
                                 heap_extract_min(&characters, (void **) &character);
                                 if (character->data & (UNIQ | BOSS) && character->hitpoints >= 0)
                                     stack_push(&monster_carry, character);
-                                else
+                                else {
+                                    free(character->inventory);
+                                    free(character->equipment);
                                     free(character);
+                                }
                             }
                             while (heap_size(&next_turn)) {
                                 heap_extract_min(&next_turn, (void **) &character);
                                 if (character->data & (UNIQ | BOSS) && character->hitpoints >= 0)
                                     stack_push(&monster_carry, character);
-                                else
+                                else {
+                                    free(character->inventory);
+                                    free(character->equipment);
                                     free(character);
+                                }
                             }
                             while (heap_size(&items)) {
                                 heap_extract_min(&items, (void **) &item);
@@ -474,7 +496,6 @@ int main(int argc, char *argv[])
                                 else
                                     free(item);
                             }
-                            heap_delete(&items);
                             generate(&dummy, hardness, &num_rooms, &rooms, &num_u_stairs, &u_stairs, &num_d_stairs, &d_stairs);
                             player->xpos = dummy->xpos;
                             player->ypos = dummy->ypos;
@@ -486,10 +507,8 @@ int main(int argc, char *argv[])
                             map_rooms(map, hardness, num_rooms, rooms);
                             place(map, u_stairs, num_u_stairs);
                             place(map, d_stairs, num_d_stairs);
-                            heap_init(&characters);
-                            heap_init(&items);
                             init_entity_map((entity_t *(*)[80]) character_map);
-                            init_entity_map((entity_t *(*)[80]) item_map);
+                            init_item_map(item_map);
                             heap_add(&characters, player, 0);
                             character_map[player->ypos][player->xpos] = player;
                             generate_monsters(&monster_dictionary, &characters, character_map, map, num_init_monsters, &monster_carry);
@@ -525,10 +544,12 @@ int main(int argc, char *argv[])
             else {
                 if (character_map[character->ypos][character->xpos] == character)
                     character_map[character->ypos][character->xpos] = NULL;
+                free(character->inventory);
+                free(character->equipment);
                 free(character);
             }
         }
-        heap_delete(&next_turn);
+        heap_delete_characters(&next_turn);
     }
 
     /* Printing Results */
@@ -544,9 +565,9 @@ int main(int argc, char *argv[])
     free(rooms);
     free(u_stairs);
     free(d_stairs);
-    heap_delete(&characters);
+    heap_delete_characters(&characters);
     heap_delete(&items);
-    stack_delete(&monster_carry);
+    stack_delete_characters(&monster_carry);
     stack_delete(&item_carry);
 
     /* Waiting for a final character */
@@ -600,7 +621,19 @@ void init_entity_map(entity_t *character_map[W_HEIGHT][W_WIDTH])
     }
 }
 
-void init_player_template(monster_template_t *player_template)
+void init_item_map(std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH])
+{
+    uint8_t i, j;
+    for (i = 0; i < W_HEIGHT; i++) {
+        for (j = 0; j < W_WIDTH; j++) {
+            while (!item_map[i][j].empty()) {
+                item_map[i][j].pop_back();
+            }
+        }
+    }
+}
+
+void init_player_template(character_template_t *player_template)
 {
     player_template->name = "Player";
     player_template->damage.base = 10000;
@@ -608,10 +641,10 @@ void init_player_template(monster_template_t *player_template)
     player_template->damage.sides = 0;
 }
 
-int load_monster_dictionary(std::vector<monster_template_t> *monster_dictionary)
+int load_monster_dictionary(std::vector<character_template_t> *monster_dictionary)
 {
     uint16_t i, j, check;
-    monster_template_t monster_template;
+    character_template_t character_template;
     std::string s;
     char *home = getenv("HOME");
     const char *gamedir = ".rlg327";
@@ -627,45 +660,45 @@ int load_monster_dictionary(std::vector<monster_template_t> *monster_dictionary)
         getline(f, s);
         if (s == "BEGIN MONSTER") {
             check = 0x0000;
-            monster_template.name = "";
+            character_template.name = "";
             do {
                 f >> s;
                 if (s == "NAME") {
                     check |= 0x0001;
                     f >> s;
-                    monster_template.name += s;
+                    character_template.name += s;
                     while (f.peek() != '\n') {
                         f >> s;
-                        monster_template.name += " ";
-                        monster_template.name += s;
+                        character_template.name += " ";
+                        character_template.name += s;
                     }
                 }
                 else if (s == "SYMB") {
                     check |= 0x0002;
                     f >> s;
-                    monster_template.symbol = s[0];
+                    character_template.symbol = s[0];
                 }
                 else if (s == "COLOR") {
                     check |= 0x0004;
-                    monster_template.color = 0x00;
+                    character_template.color = 0x00;
                     while (f.peek() != '\n') {
                         f >> s;
                         if (s == "BLACK")
-                            monster_template.color |= 0x01;
+                            character_template.color |= 0x01;
                         else if (s == "RED")
-                            monster_template.color |= 0x02;
+                            character_template.color |= 0x02;
                         else if (s == "GREEN")
-                            monster_template.color |= 0x04;
+                            character_template.color |= 0x04;
                         else if (s == "YELLOW")
-                            monster_template.color |= 0x08;
+                            character_template.color |= 0x08;
                         else if (s == "BLUE")
-                            monster_template.color |= 0x10;
+                            character_template.color |= 0x10;
                         else if (s == "MAGENTA")
-                            monster_template.color |= 0x20;
+                            character_template.color |= 0x20;
                         else if (s == "CYAN")
-                            monster_template.color |= 0x40;
+                            character_template.color |= 0x40;
                         else if (s == "WHITE")
-                            monster_template.color |= 0x80;
+                            character_template.color |= 0x80;
                         else
                             return 2;
                     }
@@ -677,97 +710,97 @@ int load_monster_dictionary(std::vector<monster_template_t> *monster_dictionary)
                         getline(f, s);
                         des.push_back(std::string(s));
                     }
-                    monster_template.description = des;
+                    character_template.description = des;
                 }
                 else if (s == "SPEED") {
                     check |= 0x0010;
                     f >> s;
                     i = 0;
-                    monster_template.speed.base = 0;
-                    monster_template.speed.num = 0;
-                    monster_template.speed.sides = 0;
+                    character_template.speed.base = 0;
+                    character_template.speed.num = 0;
+                    character_template.speed.sides = 0;
                     while (s[i] != '+') {
-                        monster_template.speed.base *= 10;
-                        monster_template.speed.base += s[i++] - '0';
+                        character_template.speed.base *= 10;
+                        character_template.speed.base += s[i++] - '0';
                     }
                     i++;
                     while (s[i] != 'd') {
-                        monster_template.speed.num *= 10;
-                        monster_template.speed.num += s[i++] - '0';
+                        character_template.speed.num *= 10;
+                        character_template.speed.num += s[i++] - '0';
                     }
                     i++;
                     while (s[i] != '\0') {
-                        monster_template.speed.sides *= 10;
-                        monster_template.speed.sides += s[i++] - '0';
+                        character_template.speed.sides *= 10;
+                        character_template.speed.sides += s[i++] - '0';
                     }
                 }
                 else if (s == "DAM") {
                     check |= 0x0020;
                     f >> s;
                     i = 0;
-                    monster_template.damage.base = 0;
-                    monster_template.damage.num = 0;
-                    monster_template.damage.sides = 0;
+                    character_template.damage.base = 0;
+                    character_template.damage.num = 0;
+                    character_template.damage.sides = 0;
                     while (s[i] != '+') {
-                        monster_template.damage.base *= 10;
-                        monster_template.damage.base += s[i++] - '0';
+                        character_template.damage.base *= 10;
+                        character_template.damage.base += s[i++] - '0';
                     }
                     i++;
                     while (s[i] != 'd') {
-                        monster_template.damage.num *= 10;
-                        monster_template.damage.num += s[i++] - '0';
+                        character_template.damage.num *= 10;
+                        character_template.damage.num += s[i++] - '0';
                     }
                     i++;
                     while (s[i] != '\0') {
-                        monster_template.damage.sides *= 10;
-                        monster_template.damage.sides += s[i++] - '0';
+                        character_template.damage.sides *= 10;
+                        character_template.damage.sides += s[i++] - '0';
                     }
                 }
                 else if (s == "HP") {
                     check |= 0x0040;
                     f >> s;
                     i = 0;
-                    monster_template.hitpoints.base = 0;
-                    monster_template.hitpoints.num = 0;
-                    monster_template.hitpoints.sides = 0;
+                    character_template.hitpoints.base = 0;
+                    character_template.hitpoints.num = 0;
+                    character_template.hitpoints.sides = 0;
                     while (s[i] != '+') {
-                        monster_template.hitpoints.base *= 10;
-                        monster_template.hitpoints.base += s[i++] - '0';
+                        character_template.hitpoints.base *= 10;
+                        character_template.hitpoints.base += s[i++] - '0';
                     }
                     i++;
                     while (s[i] != 'd') {
-                        monster_template.hitpoints.num *= 10;
-                        monster_template.hitpoints.num += s[i++] - '0';
+                        character_template.hitpoints.num *= 10;
+                        character_template.hitpoints.num += s[i++] - '0';
                     }
                     i++;
                     while (s[i] != '\0') {
-                        monster_template.hitpoints.sides *= 10;
-                        monster_template.hitpoints.sides += s[i++] - '0';
+                        character_template.hitpoints.sides *= 10;
+                        character_template.hitpoints.sides += s[i++] - '0';
                     }
                 }
                 else if (s == "ABIL") {
                     check |= 0x0080;
-                    monster_template.abilities = 0x0000;
+                    character_template.abilities = 0x0000;
                     while (f.peek() != '\n') {
                         f >> s;
                         if (s == "SMART")
-                            monster_template.abilities |= SMART;
+                            character_template.abilities |= SMART;
                         else if (s == "TELE")
-                            monster_template.abilities |= TELE;
+                            character_template.abilities |= TELE;
                         else if (s == "TUNNEL")
-                            monster_template.abilities |= TUNNEL;
+                            character_template.abilities |= TUNNEL;
                         else if (s == "ERRATIC")
-                            monster_template.abilities |= ERRATIC;
+                            character_template.abilities |= ERRATIC;
                         else if (s == "PASS")
-                            monster_template.abilities |= PASS;
+                            character_template.abilities |= PASS;
                         else if (s == "PICKUP")
-                            monster_template.abilities |= PICKUP;
+                            character_template.abilities |= PICKUP;
                         else if (s == "DESTROY")
-                            monster_template.abilities |= DESTROY;
+                            character_template.abilities |= DESTROY;
                         else if (s == "UNIQ")
-                            monster_template.abilities |= UNIQ;
+                            character_template.abilities |= UNIQ;
                         else if (s == "BOSS")
-                            monster_template.abilities |= BOSS;
+                            character_template.abilities |= BOSS;
                         else
                             return 3;
                     }
@@ -776,10 +809,10 @@ int load_monster_dictionary(std::vector<monster_template_t> *monster_dictionary)
                     check |= 0x0100;
                     f >> s;
                     i = 0;
-                    monster_template.rarity = 0;
+                    character_template.rarity = 0;
                     while (s[i] != '\0') {
-                        monster_template.rarity *= 10;
-                        monster_template.rarity += s[i++] - '0';
+                        character_template.rarity *= 10;
+                        character_template.rarity += s[i++] - '0';
                     }
                 }
                 else if (s != "END") {
@@ -790,7 +823,7 @@ int load_monster_dictionary(std::vector<monster_template_t> *monster_dictionary)
             if (check != 0x01FF) {
                 return 5;
             }
-            (*monster_dictionary).push_back(monster_template);
+            (*monster_dictionary).push_back(character_template);
         }
     } while (!f.eof());
     return 0;
@@ -831,46 +864,86 @@ int load_item_dictionary(std::vector<item_template_t> *item_dictionary)
                 else if (s == "TYPE") {
                     check |= 0x0002;
                     f >> s;
-                    if (s == "WEAPON")
+                    if (s == "WEAPON") {
                         item_template.symbol = '|';
-                    else if (s == "OFFHAND")
+                        item_template.type = WEAPON;
+                    }
+                    else if (s == "OFFHAND") {
                         item_template.symbol = ')';
-                    else if (s == "RANGED")
+                        item_template.type = OFFHAND;
+                    }
+                    else if (s == "RANGED") {
                         item_template.symbol = '}';
-                    else if (s == "ARMOR")
+                        item_template.type = RANGED;
+                    }
+                    else if (s == "ARMOR") {
                         item_template.symbol = '[';
-                    else if (s == "HELMET")
+                        item_template.type = ARMOR;
+                    }
+                    else if (s == "HELMET") {
                         item_template.symbol = ']';
-                    else if (s == "CLOAK")
+                        item_template.type = HELMET;
+                    }
+                    else if (s == "CLOAK") {
                         item_template.symbol = '(';
-                    else if (s == "GLOVES")
+                        item_template.type = CLOAK;
+                    }
+                    else if (s == "GLOVES") {
                         item_template.symbol = '{';
-                    else if (s == "BOOTS")
+                        item_template.type = GLOVES;
+                    }
+                    else if (s == "BOOTS") {
                         item_template.symbol = '\\';
-                    else if (s == "RING")
+                        item_template.type = BOOTS;
+                    }
+                    else if (s == "RING") {
                         item_template.symbol = '=';
-                    else if (s == "AMULET")
+                        item_template.type = RING1;
+                    }
+                    else if (s == "AMULET") {
                         item_template.symbol = '"';
-                    else if (s == "LIGHT")
+                        item_template.type = AMULET;
+                    }
+                    else if (s == "LIGHT") {
                         item_template.symbol = '_';
-                    else if (s == "SCROLL")
+                        item_template.type = LIGHT;
+                    }
+                    else if (s == "SCROLL") {
                         item_template.symbol = '~';
-                    else if (s == "BOOK")
+                        item_template.type = OTHER;
+                    }
+                    else if (s == "BOOK") {
                         item_template.symbol = '?';
-                    else if (s == "FLASK")
+                        item_template.type = OTHER;
+                    }
+                    else if (s == "FLASK") {
                         item_template.symbol = '!';
-                    else if (s == "GOLD")
+                        item_template.type = OTHER;
+                    }
+                    else if (s == "GOLD") {
                         item_template.symbol = '$';
-                    else if (s == "AMMUNITION")
+                        item_template.type = OTHER;
+                    }
+                    else if (s == "AMMUNITION") {
                         item_template.symbol = '/';
-                    else if (s == "FOOD")
+                        item_template.type = OTHER;
+                    }
+                    else if (s == "FOOD") {
                         item_template.symbol = ',';
-                    else if (s == "WAND")
+                        item_template.type = OTHER;
+                    }
+                    else if (s == "WAND") {
                         item_template.symbol = '-';
-                    else if (s == "CONTAINER")
+                        item_template.type = OTHER;
+                    }
+                    else if (s == "CONTAINER") {
                         item_template.symbol = '%';
-                    else
+                        item_template.type = OTHER;
+                    }
+                    else {
                         item_template.symbol = '*';
+                        item_template.type = OTHER;
+                    }
                 }
                 else if (s == "COLOR") {
                     check |= 0x0004;
@@ -1356,7 +1429,7 @@ void map_rooms(char map[W_HEIGHT][W_WIDTH], uint8_t hardness[W_HEIGHT][W_WIDTH],
     }
 }
 
-void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player, monster_template_t *player_template)
+void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], character_t *player, character_template_t *player_template)
 {
     player->symbol = '@';
     player->color = 0x80;
@@ -1365,16 +1438,19 @@ void init_player(heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDT
     player->data |= FOG;
     player->speed = 100;
     player->hitpoints = 10000;
+    player->num_items = 0;
+    player->inventory = (item_t *) malloc(10*sizeof(item_t));
+    player->equipment = (item_t *) malloc(12*sizeof(item_t));
     heap_add(characters, player, 0);
     character_map[player->ypos][player->xpos] = player;
 }
 
-void generate_monsters(std::vector<monster_template_t> *monster_dictionary, heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], uint16_t num_init_monsters, stack_t *monster_carry)
+void generate_monsters(std::vector<character_template_t> *monster_dictionary, heap_t *characters, character_t *character_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], uint16_t num_init_monsters, stack_t *monster_carry)
 {
     uint16_t i;
     uint32_t rarity_index, rarity_base;
     monster_t *monster;
-    std::vector<monster_template_t>::iterator it;
+    std::vector<character_template_t>::iterator it;
     rarity_base = 0;
     for (it = monster_dictionary->begin(); it != monster_dictionary->end(); it++) {
         rarity_base += (*it).rarity;
@@ -1423,7 +1499,7 @@ void generate_monsters(std::vector<monster_template_t> *monster_dictionary, heap
     }
 }
 
-void generate_items(std::vector<item_template_t> *item_dictionary, heap_t *items, item_t *item_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], uint16_t num_init_items, stack_t *item_carry)
+void generate_items(std::vector<item_template_t> *item_dictionary, heap_t *items, std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], uint16_t num_init_items, stack_t *item_carry)
 {
     uint16_t i;
     uint32_t rarity_index, rarity_base;
@@ -1451,9 +1527,9 @@ void generate_items(std::vector<item_template_t> *item_dictionary, heap_t *items
         do {
             item->xpos = 1 + rand() % (W_WIDTH - 2);
             item->ypos = 1 + rand() % (W_HEIGHT - 2);
-        } while (map[item->ypos][item->xpos] == ' ' || item_map[item->ypos][item->xpos] != NULL);
+        } while (map[item->ypos][item->xpos] == ' ');
         heap_add(items, item, 0);
-        item_map[item->ypos][item->xpos] = item;
+        item_map[item->ypos][item->xpos].push_back(item);
     }
 }
 
@@ -1602,7 +1678,7 @@ void derive_move_stack(stack_t *move_stack, char map[W_HEIGHT][W_WIDTH], uint8_t
     stack_push(move_stack, *thither);
 }
 
-void player_command(character_t *player, vertex_t *thither, char visible_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], item_t *item_map[W_HEIGHT][W_WIDTH])
+void player_command(character_t *player, vertex_t *thither, char visible_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH])
 {
     int cmd;
     thither->xpos = player->xpos;
@@ -1908,7 +1984,7 @@ void move_character(character_t *character_map[W_HEIGHT][W_WIDTH], character_t *
     }
 }
 
-void teleport_command(character_t *player, vertex_t *thither, char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], item_t *item_map[W_HEIGHT][W_WIDTH])
+void teleport_command(character_t *player, vertex_t *thither, char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH])
 {
     int cmd;
     player->data &= ~ESCAPE;
@@ -2095,10 +2171,10 @@ void sketch_visible_map(char visible_map[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][
     }
 }
 
-void print_monster_dictionary(std::vector<monster_template_t> monster_dictionary)
+void print_monster_dictionary(std::vector<character_template_t> monster_dictionary)
 {
     int i;
-    std::vector<monster_template_t>::iterator it;
+    std::vector<character_template_t>::iterator it;
     for (it = monster_dictionary.begin(); it != monster_dictionary.end(); it++) {
         std::cout << "Begin Monster:" << std::endl;
         std::cout << "Name: " << (*it).name << std::endl;
@@ -2253,7 +2329,7 @@ void draw_distance(uint16_t distance[W_HEIGHT][W_WIDTH], char map[W_HEIGHT][W_WI
     }
 }
 
-void draw_fog(char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], item_t *item_map[W_HEIGHT][W_WIDTH], character_t *player)
+void draw_fog(char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH], character_t *player)
 {
     uint8_t i, j, k, l;
     for (i = 0; i < W_HEIGHT; i++) {
@@ -2265,10 +2341,16 @@ void draw_fog(char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][
                     mvprintw(i + 1, j, "%c", character_map[i][j]->symbol);
                     attroff(COLOR_PAIR(k));
                 }
-                else if (item_map[i][j] != NULL) {
-                    for (k = 0, l = 1; (l & item_map[i][j]->color) == 0 && k < 7; k++, l *= 2);
+                else if (item_map[i][j].size() == 1) {
+                    for (k = 0, l = 1; (l & item_map[i][j][0]->color) == 0 && k < 7; k++, l *= 2);
                     attron(COLOR_PAIR(k));
-                    mvprintw(i + 1, j, "%c", item_map[i][j]->symbol);
+                    mvprintw(i + 1, j, "%c", item_map[i][j][0]->symbol);
+                    attroff(COLOR_PAIR(k));
+                }
+                else if (item_map[i][j].size() > 1) {
+                    for (k = 0, l = 1; (l & item_map[i][j][0]->color) == 0 && k < 7; k++, l *= 2);
+                    attron(COLOR_PAIR(k));
+                    mvprintw(i + 1, j, "&");
                     attroff(COLOR_PAIR(k));
                 }
                 else {
@@ -2282,7 +2364,7 @@ void draw_fog(char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][
     }
 }
 
-void draw_full(char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], item_t *item_map[W_HEIGHT][W_WIDTH])
+void draw_full(char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT][W_WIDTH], std::vector<item_t *> item_map[W_HEIGHT][W_WIDTH])
 {
     uint8_t i, j, k, l;
     for (i = 0; i < W_HEIGHT; i++) {
@@ -2293,10 +2375,16 @@ void draw_full(char map[W_HEIGHT][W_WIDTH], character_t *character_map[W_HEIGHT]
                 mvprintw(i + 1, j, "%c", character_map[i][j]->symbol);
                 attroff(COLOR_PAIR(k));
             }
-            else if (item_map[i][j] != NULL) {
-                for (k = 0, l = 1; (l & item_map[i][j]->color) == 0 && k < 7; k++, l *= 2);
+            else if (item_map[i][j].size() == 1) {
+                for (k = 0, l = 1; (l & item_map[i][j][0]->color) == 0 && k < 7; k++, l *= 2);
                 attron(COLOR_PAIR(k));
-                mvprintw(i + 1, j, "%c", item_map[i][j]->symbol);
+                mvprintw(i + 1, j, "%c", item_map[i][j][0]->symbol);
+                attroff(COLOR_PAIR(k));
+            }
+            else if (item_map[i][j].size() > 1) {
+                for (k = 0, l = 1; (l & item_map[i][j][0]->color) == 0 && k < 7; k++, l *= 2);
+                attron(COLOR_PAIR(k));
+                mvprintw(i + 1, j, "&");
                 attroff(COLOR_PAIR(k));
             }
             else {

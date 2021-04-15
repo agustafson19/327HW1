@@ -1,6 +1,8 @@
 #ifndef HEAP_H
 #define HEAP_H
 
+#include "entity.h"
+
 typedef class heap_node heap_node_t;
 
 class heap_node {
@@ -18,6 +20,7 @@ typedef class heap {
 
 int heap_init(heap_t *h);
 int heap_delete(heap_t *h);
+int heap_delete_characters(heap_t *h);
 int heap_add(heap_t *h, void *value, uint32_t priority);
 int heap_decrease_priority_vertex(heap_t *h, void *value, uint32_t priority);
 int heap_peek(heap_t *h, void **value, uint32_t *priority);

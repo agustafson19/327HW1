@@ -23,6 +23,19 @@ int heap_delete(heap_t *h)
     return 0;
 }
 
+int heap_delete_characters(heap_t *h)
+{
+    uint32_t i;
+    for (i = 0; i < h->size; i++) {
+        free(((character_t *)h->nodes[i].value)->inventory);
+        free(((character_t *)h->nodes[i].value)->equipment);
+        free(h->nodes[i].value);
+    }
+    h->size = 0;
+    free(h->nodes);
+    return 0;
+}
+
 int heap_add(heap_t *h, void *value, uint32_t priority)
 {
     uint32_t i = h->size;

@@ -1,6 +1,8 @@
 #ifndef STACK_H
 #define STACK_H
 
+#include "entity.h"
+
 typedef class stack_node stack_node_t;
 
 class stack_node {
@@ -17,6 +19,7 @@ typedef class stack {
 
 int stack_init(stack_t *s);
 int stack_delete(stack_t *s);
+int stack_delete_characters(stack_t *s);
 int stack_push(stack_t *s, void *value);
 int stack_peek(stack_t *s, void **value);
 int stack_pop(stack_t *s, void **value);

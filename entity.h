@@ -15,39 +15,11 @@ class entity_t {
         uint8_t color;
 };
 
-class monster_template_t {
-    public:
-        std::string name;
-        char symbol;
-        uint8_t color;
-        std::vector<std::string> description;
-        Dice_t speed;
-        uint16_t abilities;
-        Dice_t hitpoints;
-        Dice_t damage;
-        uint8_t rarity;
-
-        void *instantiate();
-};
-
-class character_t : public entity_t {
-    public:
-        monster_template_t *entry;
-        uint16_t data;
-        uint16_t sequence;
-        uint16_t speed;
-        int hitpoints;
-};
-
-class monster_t : public character_t {
-    public:
-        vertex_t known_location;
-};
-
 class item_template_t {
     public:
         std::string name;
         char symbol;
+        uint8_t type;
         uint8_t color;
         std::vector<std::string> description;
         Dice_t speed_bonus;
@@ -74,6 +46,38 @@ class item_t : public entity_t {
         uint32_t defence_bonus;
         uint32_t weight;
         uint32_t value;
+};
+
+class character_template_t {
+    public:
+        std::string name;
+        char symbol;
+        uint8_t color;
+        std::vector<std::string> description;
+        Dice_t speed;
+        uint16_t abilities;
+        Dice_t hitpoints;
+        Dice_t damage;
+        uint8_t rarity;
+
+        void *instantiate();
+};
+
+class character_t : public entity_t {
+    public:
+        character_template_t *entry;
+        uint16_t data;
+        uint16_t sequence;
+        uint16_t speed;
+        int hitpoints;
+        uint8_t num_items;
+        item_t *inventory;
+        item_t *equipment;
+};
+
+class monster_t : public character_t {
+    public:
+        vertex_t known_location;
 };
 
 #endif

@@ -20,6 +20,19 @@ int stack_delete(stack_t *s)
     return 0;
 }
 
+int stack_delete_characters(stack_t *s)
+{
+    stack_node_t *n;
+    for (n = s->top; n; n = s->top) {
+        s->top = n->next;
+        free(((character_t *)n->value)->inventory);
+        free(((character_t *)n->value)->equipment);
+        free(n->value);
+        free(n);
+    }
+    return 0;
+}
+
 int stack_push(stack_t *s, void *value)
 {
     stack_node_t *n;
