@@ -29,6 +29,7 @@ class item_template_t {
         Dice_t damage_bonus;
         Dice_t dodge_bonus;
         Dice_t defence_bonus;
+        Dice_t light;
         Dice_t weight;
         Dice_t value;
         uint8_t rarity;
@@ -40,12 +41,13 @@ class item_t : public entity_t {
     public:
         item_template_t *entry;
         int speed_bonus;
-        uint32_t attributes;
-        uint32_t hitpoint_bonus;
-        uint32_t dodge_bonus;
-        uint32_t defence_bonus;
-        uint32_t weight;
-        uint32_t value;
+        int attributes;
+        int hitpoint_bonus;
+        int dodge_bonus;
+        int defence_bonus;
+        int light;
+        int weight;
+        int value;
 };
 
 class character_template_t {
