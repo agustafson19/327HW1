@@ -1,25 +1,13 @@
 ARVID GUSTAFSON
 
-In any menu, use 's' to select. Use 'j' and 'k' to navigate descriptions, e.g. Casper's.
+Light sources were added. 'LIT' is an optional attribute that must be added to the objects description class. Light sources expand the field of view of the player durring fog of war.
 
-Use ',' to pick up an item; new commands do not consume a turn.
+The 'L' command also identifies objects. Only things in sight can be identified. Preference is given to monsters, and then items on the top of a stack.
 
-The number of items displayed of a monster, like the player, does not count equiped items.
+The shoot function models an attempt for one character to shoot another character with a ranged weapon, using ammunition.
 
-The stack_delete_characters and heap_delete caracters functions do deep deletes on characters.
+Shots fired ignore defence, but the damage dealt is solely determined by the damage of the weapon, and of the amunition.
 
-The heap_remove function removes a specific element from the heap.
+Currently, anything seen can be shot. Ranged weapons ignore walls, and can shoot anywhere with for of war turned off.
 
-The init_item_map initializes the item map, as it is a map of vectors.
-
-The init_player_template class initializes a character template for the player.
-
-The equipment_num_to_slot converts an equipment index to a std::string.
-
-The draw_inventory and draw_equipment functions draw the inventory and equipment screens.
-
-The prompt_inventory and prompt_equipment functions are used in managing the player's inventory.
-
-The display_item and display_character functions are used to display descriptions of existing monsters.
-
-The teleport_command was renamed to prompt_place, and was slightly tweaked.
+Saving and loading game states were attempted, but could not be done in the time I had.
